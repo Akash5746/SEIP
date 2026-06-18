@@ -38,8 +38,8 @@ class JwtAuthenticationFilterTest {
 
     @BeforeEach
     void setUp() {
-        // chain.filter() returns empty Mono by default
-        when(chain.filter(any())).thenReturn(Mono.empty());
+        // lenient: 401-path tests never call chain.filter(), so strict stubbing would flag this
+        lenient().when(chain.filter(any())).thenReturn(Mono.empty());
     }
 
     // ── Open endpoints ───────────────────────────────────────────────────────

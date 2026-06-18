@@ -87,6 +87,9 @@ public class JwtService {
         try {
             final String username = extractUsername(token);
             return username.equals(userDetails.getUsername()) && !isTokenExpired(token);
+        } catch (TokenExpiredException ex) {
+            log.warn("Token expired: {}", ex.getMessage());
+            return false;
         } catch (JwtException | IllegalArgumentException ex) {
             log.warn("Token validation failed: {}", ex.getMessage());
             return false;
@@ -96,7 +99,7 @@ public class JwtService {
     public boolean isTokenExpired(String token) {
         try {
             return extractExpiration(token).before(new Date());
-        } catch (ExpiredJwtException ex) {
+        } catch (TokenExpiredException | ExpiredJwtException ex) {
             return true;
         }
     }
