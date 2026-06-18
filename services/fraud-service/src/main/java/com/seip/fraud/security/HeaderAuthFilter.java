@@ -24,8 +24,8 @@ import java.util.List;
 @Component
 public class HeaderAuthFilter extends OncePerRequestFilter {
 
-    private static final String EMPLOYEE_ID_HEADER  = "X-Employee-Id";
-    private static final String EMPLOYEE_ROLE_HEADER = "X-Employee-Role";
+    private static final String EMPLOYEE_ID_HEADER  = "X-Auth-User-Id";
+    private static final String EMPLOYEE_ROLE_HEADER = "X-Auth-User-Role";
     private static final String SERVICE_NAME_HEADER  = "X-Service-Name";
 
     @Override
@@ -49,7 +49,9 @@ public class HeaderAuthFilter extends OncePerRequestFilter {
         }
 
         if (StringUtils.hasText(employeeId)) {
-            String grantedRole = StringUtils.hasText(role) ? "ROLE_" + role.toUpperCase() : "ROLE_USER";
+            String grantedRole = StringUtils.hasText(role)
+                    ? (role.startsWith("ROLE_") ? role.toUpperCase() : "ROLE_" + role.toUpperCase())
+                    : "ROLE_USER";
             var auth = new UsernamePasswordAuthenticationToken(
                     employeeId, null,
                     List.of(new SimpleGrantedAuthority(grantedRole)));

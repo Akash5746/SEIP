@@ -1,6 +1,7 @@
 package com.seip.expense.controller;
 
 import com.seip.expense.dto.*;
+import com.seip.expense.service.ExpenseCategoryService;
 import com.seip.expense.service.ExpenseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -16,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Slf4j
 @RestController
@@ -25,6 +27,7 @@ import java.math.BigDecimal;
 public class ExpenseController {
 
     private final ExpenseService expenseService;
+    private final ExpenseCategoryService categoryService;
 
     @PostMapping
     @Operation(summary = "Create a new expense in DRAFT status")
@@ -50,6 +53,36 @@ public class ExpenseController {
                 : Sort.by(sortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
         PageResponse<ExpenseSummaryDto> response = expenseService.getExpensesByEmployee(employeeId, pageable);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/categories")
+    @Operation(summary = "Get all expense categories (alias for /categories)")
+    public ResponseEntity<ApiResponse<List<ExpenseCategoryDto>>> getCategoriesAlias() {
+        return ResponseEntity.ok(ApiResponse.success(categoryService.getAllCategories()));
+    }
+
+    @GetMapping("/my")
+    @Operation(summary = "Get expenses for the current employee (alias for GET /expenses)")
+    public ResponseEntity<ApiResponse<PageResponse<ExpenseSummaryDto>>> getMyExpensesAlias(
+            @RequestHeader("X-Auth-User-Id") Long employeeId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String status) {
+        Sort sort = Sort.by("createdAt").descending();
+        Pageable pageable = PageRequest.of(page, size, sort);
+        PageResponse<ExpenseSummaryDto> response = expenseService.getExpensesByEmployee(employeeId, pageable);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/pending-approvals")
+    @Operation(summary = "Get pending expenses for approval (alias for /manager/queue)")
+    public ResponseEntity<ApiResponse<PageResponse<ExpenseSummaryDto>>> getPendingApprovalsAlias(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String riskLevel) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("submittedAt").ascending());
+        PageResponse<ExpenseSummaryDto> response = expenseService.getPendingExpensesForManager(pageable);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

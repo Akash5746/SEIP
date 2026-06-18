@@ -39,8 +39,8 @@ public class AnalyticsService {
                                      THEN e.amount ELSE 0 END), 0)                  AS rejected_amount,
                     COALESCE(AVG(fa.risk_score), 0)                                 AS avg_risk_score,
                     COUNT(CASE WHEN fa.risk_level = 'HIGH' THEN 1 END)              AS high_risk_count
-                FROM expense_schema.expenses e
-                LEFT JOIN fraud_schema.fraud_analysis fa ON fa.expense_id = e.id
+                FROM expense.expenses e
+                LEFT JOIN fraud.fraud_analysis fa ON fa.expense_id = e.id
                 """;
 
             return jdbcTemplate.queryForObject(sql, (rs, rowNum) -> new OrgSummaryDto(
@@ -70,7 +70,7 @@ public class AnalyticsService {
                     EXTRACT(YEAR  FROM e.expense_date)::INT AS year,
                     COALESCE(SUM(e.amount), 0)              AS total_amount,
                     COUNT(*)                                AS expense_count
-                FROM expense_schema.expenses e
+                FROM expense.expenses e
                 WHERE EXTRACT(YEAR FROM e.expense_date) = ?
                   AND e.status NOT IN ('DRAFT', 'REJECTED')
                 GROUP BY month, year
@@ -98,7 +98,7 @@ public class AnalyticsService {
             // First compute the grand total for percentage calculation
             String totalSql = """
                 SELECT COALESCE(SUM(e.amount), 0)
-                FROM expense_schema.expenses e
+                FROM expense.expenses e
                 WHERE e.expense_date BETWEEN ? AND ?
                   AND e.status NOT IN ('DRAFT', 'REJECTED')
                 """;
@@ -114,8 +114,8 @@ public class AnalyticsService {
                     ec.code                              AS category_code,
                     COALESCE(SUM(e.amount), 0)           AS total_amount,
                     COUNT(e.id)                          AS expense_count
-                FROM expense_schema.expenses e
-                JOIN expense_schema.expense_categories ec ON e.category_id = ec.id
+                FROM expense.expenses e
+                JOIN expense.expense_categories ec ON e.category_id = ec.id
                 WHERE e.expense_date BETWEEN ? AND ?
                   AND e.status NOT IN ('DRAFT', 'REJECTED')
                 GROUP BY ec.name, ec.code
@@ -159,7 +159,7 @@ public class AnalyticsService {
                                      THEN e.amount ELSE 0 END), 0)                         AS rejected_amount,
                     COALESCE(SUM(CASE WHEN e.status IN ('PENDING','SUBMITTED','UNDER_REVIEW')
                                      THEN e.amount ELSE 0 END), 0)                         AS pending_amount
-                FROM expense_schema.expenses e
+                FROM expense.expenses e
                 WHERE e.employee_id = ?
                 GROUP BY e.employee_id
                 """;
@@ -201,9 +201,9 @@ public class AnalyticsService {
                               / COUNT(DISTINCT e.employee_id)
                          ELSE 0
                     END                                                 AS avg_per_employee
-                FROM expense_schema.expenses e
-                JOIN user_schema.users u ON u.id = e.employee_id
-                LEFT JOIN user_schema.departments d ON d.id = u.department_id
+                FROM expense.expenses e
+                JOIN users.employees u ON u.id = e.employee_id
+                LEFT JOIN users.departments d ON d.id = u.department_id
                 WHERE e.status NOT IN ('DRAFT', 'REJECTED')
                 GROUP BY u.department_id, d.name
                 ORDER BY total_amount DESC
@@ -236,7 +236,7 @@ public class AnalyticsService {
                     COUNT(CASE WHEN fa.risk_level = 'HIGH'   THEN 1 END) AS high_risk,
                     COUNT(CASE WHEN fa.risk_level = 'MEDIUM' THEN 1 END) AS medium_risk,
                     COUNT(CASE WHEN fa.risk_level = 'LOW'    THEN 1 END) AS low_risk
-                FROM fraud_schema.fraud_analysis fa
+                FROM fraud.fraud_analysis fa
                 WHERE EXTRACT(YEAR FROM fa.analysis_time) = ?
                 GROUP BY month, year
                 ORDER BY month ASC
@@ -270,7 +270,7 @@ public class AnalyticsService {
                     e.employee_id,
                     COALESCE(SUM(e.amount), 0) AS total_amount,
                     COUNT(e.id)                AS claim_count
-                FROM expense_schema.expenses e
+                FROM expense.expenses e
                 WHERE e.status NOT IN ('DRAFT', 'REJECTED')
                 GROUP BY e.employee_id
                 ORDER BY total_amount DESC

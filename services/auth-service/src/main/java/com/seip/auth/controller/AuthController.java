@@ -65,7 +65,7 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Logged out successfully", null));
     }
 
-    @GetMapping("/me")
+    @GetMapping({"/me", "/profile"})
     @Operation(summary = "Get the currently authenticated user's profile",
             security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<ApiResponse<UserInfoResponse>> getCurrentUser(

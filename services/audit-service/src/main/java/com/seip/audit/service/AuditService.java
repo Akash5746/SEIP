@@ -5,14 +5,17 @@ import com.seip.audit.dto.PageResponse;
 import com.seip.audit.entity.AuditLog;
 import com.seip.audit.exception.AuditLogNotFoundException;
 import com.seip.audit.repository.AuditLogRepository;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -35,7 +38,15 @@ public class AuditService {
                                                LocalDateTime to) {
         log.debug("Fetching audit logs - userId={}, action={}, from={}, to={}", userId, action, from, to);
 
-        Page<AuditLog> page = auditLogRepository.findWithFilters(userId, action, from, to, pageable);
+        Specification<AuditLog> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (userId != null)  predicates.add(cb.equal(root.get("userId"), userId));
+            if (action != null)  predicates.add(cb.like(root.get("action"), "%" + action + "%"));
+            if (from != null)    predicates.add(cb.greaterThanOrEqualTo(root.get("timestamp"), from));
+            if (to != null)      predicates.add(cb.lessThanOrEqualTo(root.get("timestamp"), to));
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+        Page<AuditLog> page = auditLogRepository.findAll(spec, pageable);
         Page<AuditEventDto> dtoPage = page.map(this::toDto);
         return PageResponse.from(dtoPage);
     }

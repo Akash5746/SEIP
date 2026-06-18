@@ -27,8 +27,8 @@ import java.util.stream.Collectors;
 public class HeaderAuthFilter extends OncePerRequestFilter {
 
     public static final String HEADER_USER_ID = "X-Auth-User-Id";
-    public static final String HEADER_USER_EMAIL = "X-Auth-User-Email";
-    public static final String HEADER_USER_ROLES = "X-Auth-User-Roles";
+    public static final String HEADER_USER_EMAIL = "X-Auth-Username";
+    public static final String HEADER_USER_ROLES = "X-Auth-User-Role";
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -45,7 +45,8 @@ public class HeaderAuthFilter extends OncePerRequestFilter {
                 authorities = Arrays.stream(rolesHeader.split(","))
                         .map(String::trim)
                         .filter(StringUtils::hasText)
-                        .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                        .map(role -> new SimpleGrantedAuthority(
+                                role.startsWith("ROLE_") ? role : "ROLE_" + role))
                         .collect(Collectors.toList());
             }
 
