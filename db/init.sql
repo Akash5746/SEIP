@@ -93,6 +93,15 @@ CREATE INDEX IF NOT EXISTS idx_expense_status      ON expense.expenses(status);
 CREATE INDEX IF NOT EXISTS idx_expense_submitted   ON expense.expenses(submitted_at DESC);
 
 -- ── Seed expense categories ───────────────────────────────────────
+CREATE TABLE IF NOT EXISTS expense.expense_categories (
+    id          BIGSERIAL PRIMARY KEY,
+    name        VARCHAR(100) NOT NULL UNIQUE,
+    code        VARCHAR(20) NOT NULL UNIQUE,
+    description VARCHAR(500),
+    is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 INSERT INTO expense.expense_categories (code, name, description, is_active)
 VALUES
   ('FOOD',          'Food & Dining',       'Meals, restaurants, catering',              true),
