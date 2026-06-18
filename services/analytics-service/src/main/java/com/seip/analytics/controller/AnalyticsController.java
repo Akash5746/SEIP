@@ -24,6 +24,54 @@ public class AnalyticsController {
 
     private final AnalyticsService analyticsService;
 
+    @GetMapping("/dashboard-stats")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FINANCE', 'EMPLOYEE')")
+    @Operation(summary = "Get dashboard stats for the current user")
+    public ResponseEntity<ApiResponse<DashboardStatsDto>> getDashboardStats() {
+        log.info("GET /analytics/dashboard-stats");
+        return ResponseEntity.ok(ApiResponse.success("Dashboard stats retrieved", analyticsService.getDashboardStats()));
+    }
+
+    @GetMapping("/recent-expenses")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FINANCE', 'EMPLOYEE')")
+    @Operation(summary = "Get recent expenses")
+    public ResponseEntity<ApiResponse<List<RecentExpenseDto>>> getRecentExpenses(
+            @RequestParam(defaultValue = "10") int limit) {
+        log.info("GET /analytics/recent-expenses?limit={}", limit);
+        return ResponseEntity.ok(ApiResponse.success("Recent expenses retrieved", analyticsService.getRecentExpenses(limit)));
+    }
+
+    @GetMapping("/monthly-spend")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FINANCE', 'EMPLOYEE')")
+    @Operation(summary = "Alias: monthly spend trends")
+    public ResponseEntity<ApiResponse<List<MonthlySpendDto>>> getMonthlySpend(
+            @RequestParam(defaultValue = "2024") int year) {
+        log.info("GET /analytics/monthly-spend?year={}", year);
+        return ResponseEntity.ok(ApiResponse.success("Monthly spend retrieved", analyticsService.getMonthlyTrends(year)));
+    }
+
+    @GetMapping("/category-spend")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FINANCE', 'EMPLOYEE')")
+    @Operation(summary = "Alias: category spend breakdown")
+    public ResponseEntity<ApiResponse<List<CategorySpendDto>>> getCategorySpend(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        LocalDate f = from != null ? from : (startDate != null ? startDate : LocalDate.now().minusMonths(6));
+        LocalDate t = to   != null ? to   : (endDate   != null ? endDate   : LocalDate.now());
+        log.info("GET /analytics/category-spend from={} to={}", f, t);
+        return ResponseEntity.ok(ApiResponse.success("Category spend retrieved", analyticsService.getCategoryBreakdown(f, t)));
+    }
+
+    @GetMapping("/department-spend")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FINANCE', 'EMPLOYEE')")
+    @Operation(summary = "Alias: department spend breakdown")
+    public ResponseEntity<ApiResponse<List<DepartmentReportDto>>> getDepartmentSpend() {
+        log.info("GET /analytics/department-spend");
+        return ResponseEntity.ok(ApiResponse.success("Department spend retrieved", analyticsService.getDepartmentReport()));
+    }
+
     @GetMapping("/summary")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FINANCE')")
     @Operation(summary = "Get organisation-wide expense summary",

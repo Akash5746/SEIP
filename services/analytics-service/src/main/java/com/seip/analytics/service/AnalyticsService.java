@@ -12,6 +12,7 @@ import java.math.RoundingMode;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Slf4j
@@ -20,6 +21,76 @@ import java.util.List;
 public class AnalyticsService {
 
     private final JdbcTemplate jdbcTemplate;
+
+    // -----------------------------------------------------------------------
+    // Dashboard stats (used by frontend dashboard)
+    // -----------------------------------------------------------------------
+    public DashboardStatsDto getDashboardStats() {
+        log.debug("Running dashboard stats query");
+        try {
+            String sql = """
+                SELECT
+                    COUNT(*)                                                                    AS total_expenses,
+                    COUNT(CASE WHEN status IN ('SUBMITTED','UNDER_REVIEW') THEN 1 END)         AS pending_count,
+                    COALESCE(SUM(CASE WHEN DATE_TRUNC('month', expense_date) = DATE_TRUNC('month', CURRENT_DATE)
+                                     THEN amount ELSE 0 END), 0)                               AS this_month_amount,
+                    COUNT(CASE WHEN risk_level = 'HIGH' THEN 1 END)                            AS high_risk_alerts,
+                    COUNT(CASE WHEN status = 'APPROVED'
+                                AND DATE_TRUNC('month', reviewed_at) = DATE_TRUNC('month', CURRENT_DATE)
+                                THEN 1 END)                                                    AS approved_this_month,
+                    COUNT(CASE WHEN status = 'REJECTED'
+                                AND DATE_TRUNC('month', reviewed_at) = DATE_TRUNC('month', CURRENT_DATE)
+                                THEN 1 END)                                                    AS rejected_this_month
+                FROM expense.expenses
+                WHERE status != 'DRAFT'
+                """;
+            return jdbcTemplate.queryForObject(sql, (rs, rowNum) -> new DashboardStatsDto(
+                    rs.getLong("total_expenses"),
+                    rs.getLong("pending_count"),
+                    rs.getDouble("this_month_amount"),
+                    rs.getLong("high_risk_alerts"),
+                    rs.getLong("approved_this_month"),
+                    rs.getLong("rejected_this_month")
+            ));
+        } catch (Exception e) {
+            log.error("Error computing dashboard stats: {}", e.getMessage(), e);
+            throw new AnalyticsException("Failed to compute dashboard stats", e);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Recent expenses (used by frontend dashboard)
+    // -----------------------------------------------------------------------
+    public List<RecentExpenseDto> getRecentExpenses(int limit) {
+        log.debug("Running recent expenses query, limit={}", limit);
+        if (limit <= 0 || limit > 100) limit = 10;
+        try {
+            String sql = """
+                SELECT id, title, amount, status,
+                       COALESCE(risk_level, 'LOW') AS risk_level,
+                       created_at, merchant_name
+                FROM expense.expenses
+                ORDER BY created_at DESC
+                LIMIT ?
+                """;
+            int finalLimit = limit;
+            return jdbcTemplate.query(sql, (rs, rowNum) -> {
+                var ts = rs.getTimestamp("created_at");
+                return new RecentExpenseDto(
+                        rs.getLong("id"),
+                        rs.getString("title"),
+                        rs.getDouble("amount"),
+                        rs.getString("status"),
+                        rs.getString("risk_level"),
+                        ts != null ? ts.toLocalDateTime() : LocalDateTime.now(),
+                        rs.getString("merchant_name")
+                );
+            }, finalLimit);
+        } catch (Exception e) {
+            log.error("Error fetching recent expenses: {}", e.getMessage(), e);
+            throw new AnalyticsException("Failed to fetch recent expenses", e);
+        }
+    }
 
     // -----------------------------------------------------------------------
     // Organisation-wide summary
