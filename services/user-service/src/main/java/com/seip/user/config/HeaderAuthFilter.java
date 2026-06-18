@@ -35,7 +35,8 @@ public class HeaderAuthFilter extends OncePerRequestFilter {
 
         if (StringUtils.hasText(userId) && StringUtils.hasText(username)) {
             List<SimpleGrantedAuthority> authorities = StringUtils.hasText(role)
-                    ? Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()))
+                    ? Collections.singletonList(new SimpleGrantedAuthority(
+                            role.startsWith("ROLE_") ? role.toUpperCase() : "ROLE_" + role.toUpperCase()))
                     : Collections.emptyList();
 
             UsernamePasswordAuthenticationToken authentication =

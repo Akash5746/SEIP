@@ -14,6 +14,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.*;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -65,7 +66,7 @@ class AuditServiceTest {
         // Arrange
         Pageable pageable = PageRequest.of(0, 20, Sort.by("timestamp").descending());
         Page<AuditLog> page = new PageImpl<>(List.of(sampleLog), pageable, 1);
-        when(auditLogRepository.findWithFilters(null, null, null, null, pageable)).thenReturn(page);
+        when(auditLogRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(page);
 
         // Act
         PageResponse<AuditEventDto> result = auditService.getLogs(pageable, null, null, null, null);
@@ -77,7 +78,7 @@ class AuditServiceTest {
         assertThat(result.content().get(0).eventId()).isEqualTo(sampleEventId);
         assertThat(result.content().get(0).action()).isEqualTo("EXPENSE_SUBMITTED");
 
-        verify(auditLogRepository).findWithFilters(null, null, null, null, pageable);
+        verify(auditLogRepository).findAll(any(Specification.class), eq(pageable));
     }
 
     @Test
@@ -88,14 +89,14 @@ class AuditServiceTest {
         LocalDateTime from = LocalDateTime.of(2024, 1, 1, 0, 0);
         LocalDateTime to   = LocalDateTime.of(2024, 12, 31, 23, 59);
         Page<AuditLog> emptyPage = Page.empty(pageable);
-        when(auditLogRepository.findWithFilters("user-123", "EXPENSE", from, to, pageable))
+        when(auditLogRepository.findAll(any(Specification.class), eq(pageable)))
                 .thenReturn(emptyPage);
 
         // Act
         PageResponse<AuditEventDto> result = auditService.getLogs(pageable, "user-123", "EXPENSE", from, to);
 
         // Assert
-        verify(auditLogRepository).findWithFilters("user-123", "EXPENSE", from, to, pageable);
+        verify(auditLogRepository).findAll(any(Specification.class), eq(pageable));
         assertThat(result.totalElements()).isZero();
     }
 

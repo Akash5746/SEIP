@@ -66,26 +66,46 @@ CREATE TABLE IF NOT EXISTS users.profiles (
 
 -- ── Expense Schema ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS expense.expenses (
-    id             BIGSERIAL PRIMARY KEY,
-    user_id        BIGINT         NOT NULL,
-    title          VARCHAR(255)   NOT NULL,
-    amount         NUMERIC(12, 2) NOT NULL CHECK (amount > 0),
-    currency       CHAR(3)        NOT NULL DEFAULT 'USD',
-    category       VARCHAR(50)    NOT NULL,
-    merchant_name  VARCHAR(255),
-    description    TEXT,
-    receipt_url    TEXT,
-    status         VARCHAR(30)    NOT NULL DEFAULT 'PENDING',
-    submitted_at   TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
-    approved_at    TIMESTAMPTZ,
-    approved_by    BIGINT,
-    created_at     TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
-    updated_at     TIMESTAMPTZ    NOT NULL DEFAULT NOW()
+    id              BIGSERIAL PRIMARY KEY,
+    expense_number  VARCHAR(30)    NOT NULL UNIQUE,
+    employee_id     BIGINT         NOT NULL,
+    category_id     BIGINT,
+    title           VARCHAR(200)   NOT NULL,
+    description     VARCHAR(2000),
+    amount          NUMERIC(15, 2) NOT NULL CHECK (amount > 0),
+    currency        VARCHAR(10)    NOT NULL DEFAULT 'INR',
+    merchant_name   VARCHAR(200),
+    expense_date    DATE           NOT NULL,
+    status          VARCHAR(20)    NOT NULL DEFAULT 'DRAFT',
+    risk_score      INT            NOT NULL DEFAULT 0,
+    risk_level      VARCHAR(10)    NOT NULL DEFAULT 'LOW',
+    reviewer_id     BIGINT,
+    review_notes    VARCHAR(2000),
+    submitted_at    TIMESTAMPTZ,
+    reviewed_at     TIMESTAMPTZ,
+    reimbursed_at   TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ    NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_expense_user_id   ON expense.expenses(user_id);
-CREATE INDEX IF NOT EXISTS idx_expense_status    ON expense.expenses(status);
-CREATE INDEX IF NOT EXISTS idx_expense_submitted ON expense.expenses(submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_expense_employee_id ON expense.expenses(employee_id);
+CREATE INDEX IF NOT EXISTS idx_expense_status      ON expense.expenses(status);
+CREATE INDEX IF NOT EXISTS idx_expense_submitted   ON expense.expenses(submitted_at DESC);
+
+-- ── Seed expense categories ───────────────────────────────────────
+INSERT INTO expense.expense_categories (code, name, description, is_active)
+VALUES
+  ('FOOD',          'Food & Dining',       'Meals, restaurants, catering',              true),
+  ('TRAVEL',        'Travel',              'Flights, hotels, transportation',           true),
+  ('ACCOMMODATION', 'Accommodation',       'Hotel stays, lodging',                      true),
+  ('OFFICE',        'Office Supplies',     'Stationery, equipment',                     true),
+  ('TECH',          'Technology',          'Software, hardware, subscriptions',         true),
+  ('TRAINING',      'Training & Education','Courses, conferences, certifications',      true),
+  ('MARKETING',     'Marketing',           'Advertising, events, promotions',           true),
+  ('ENTERTAINMENT', 'Entertainment',       'Client entertainment, team events',         true),
+  ('COMMUNICATION', 'Communication',       'Phone, internet, postal',                   true),
+  ('OTHER',         'Other',               'Miscellaneous expenses',                    true)
+ON CONFLICT DO NOTHING;
 
 -- ── Fraud Schema ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS fraud.fraud_records (
@@ -154,7 +174,7 @@ CREATE TABLE IF NOT EXISTS analytics.expense_summaries (
 
 -- ── Seed admin user (password: admin123 BCrypt hash) ─────────────
 INSERT INTO auth.roles (name)
-VALUES ('ROLE_EMPLOYEE'), ('ROLE_MANAGER'), ('ADMIN')
+VALUES ('ROLE_EMPLOYEE'), ('ROLE_MANAGER'), ('ROLE_ADMIN')
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO auth.users (
@@ -169,7 +189,7 @@ INSERT INTO auth.users (
 VALUES (
     'admin',
     'admin@seip.com',
-    '$2a$12$OcN5ER/Tus.5.kRaGRNGJe.MN.dSg7pI8GNHMWfTPLXdY0aXSaMPi',
+    '$2b$12$2I8i6ftOGxbV0tJWnk3WrO5QbEua9zxWAoKwFTs6Pl4lgoLJwki2u',
     TRUE,
     TRUE,
     TRUE,
@@ -180,6 +200,6 @@ ON CONFLICT (email) DO NOTHING;
 INSERT INTO auth.user_roles (user_id, role_id)
 SELECT u.id, r.id
 FROM auth.users u
-JOIN auth.roles r ON r.name = 'ADMIN'
+JOIN auth.roles r ON r.name = 'ROLE_ADMIN'
 WHERE u.email = 'admin@seip.com'
 ON CONFLICT DO NOTHING;

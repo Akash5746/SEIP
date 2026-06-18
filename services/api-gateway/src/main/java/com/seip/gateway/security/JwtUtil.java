@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.List;
 
 /**
  * Utility component for JWT token parsing and validation.
@@ -40,8 +41,14 @@ public class JwtUtil {
         return String.valueOf(extractAllClaims(token).get("userId"));
     }
 
+    @SuppressWarnings("unchecked")
     public String extractRole(String token) {
-        return String.valueOf(extractAllClaims(token).get("role"));
+        Object rolesClaim = extractAllClaims(token).get("roles");
+        if (rolesClaim instanceof List<?> roles && !roles.isEmpty()) {
+            return String.valueOf(roles.get(0));
+        }
+        Object roleClaim = extractAllClaims(token).get("role");
+        return roleClaim != null ? String.valueOf(roleClaim) : "ROLE_EMPLOYEE";
     }
 
     public boolean isTokenExpired(String token) {

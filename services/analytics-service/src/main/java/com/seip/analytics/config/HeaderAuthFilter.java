@@ -19,9 +19,9 @@ import java.util.List;
 @Component
 public class HeaderAuthFilter extends OncePerRequestFilter {
 
-    static final String HEADER_USER_ID   = "X-User-Id";
-    static final String HEADER_USER_ROLE = "X-User-Role";
-    static final String HEADER_USERNAME  = "X-Username";
+    static final String HEADER_USER_ID   = "X-Auth-User-Id";
+    static final String HEADER_USER_ROLE = "X-Auth-User-Role";
+    static final String HEADER_USERNAME  = "X-Auth-Username";
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
