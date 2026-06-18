@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>New Expense Submitted</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Arial', sans-serif; background-color: #f0f0f5; padding: 20px; }
+        .wrapper { max-width: 600px; margin: 0 auto; }
+        .header {
+            background: linear-gradient(135deg, #4F46E5, #7C3AED);
+            color: white;
+            padding: 28px 32px;
+            border-radius: 12px 12px 0 0;
+        }
+        .header h1 { font-size: 22px; font-weight: 700; letter-spacing: 0.3px; }
+        .header p { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+        .logo { font-size: 28px; margin-bottom: 12px; }
+        .card {
+            background: white;
+            padding: 32px;
+            border: 1px solid #e5e7eb;
+            border-top: none;
+        }
+        .greeting { font-size: 16px; color: #374151; margin-bottom: 20px; }
+        .info-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        .info-table tr td { padding: 12px 16px; border-bottom: 1px solid #f3f4f6; font-size: 14px; }
+        .info-table tr td:first-child { color: #6b7280; font-weight: 600; width: 40%; }
+        .info-table tr td:last-child { color: #111827; font-weight: 500; }
+        .amount-cell { font-size: 20px !important; color: #4F46E5 !important; font-weight: 700 !important; }
+        .badge {
+            display: inline-block;
+            background: #EDE9FE;
+            color: #5B21B6;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .action-box {
+            background: #F5F3FF;
+            border-left: 4px solid #4F46E5;
+            padding: 16px 20px;
+            border-radius: 0 8px 8px 0;
+            margin: 24px 0;
+        }
+        .action-box p { color: #4338CA; font-size: 14px; font-weight: 500; }
+        .btn {
+            display: inline-block;
+            background: #4F46E5;
+            color: white !important;
+            text-decoration: none;
+            padding: 12px 28px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+        .footer {
+            background: #f9fafb;
+            padding: 20px 32px;
+            border: 1px solid #e5e7eb;
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            text-align: center;
+        }
+        .footer p { font-size: 12px; color: #9ca3af; }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <!-- Header -->
+    <div class="header">
+        <div class="logo">💼</div>
+        <h1>New Expense Submitted</h1>
+        <p>Smart Expense Intelligence Platform — Action Required</p>
+    </div>
+
+    <!-- Body Card -->
+    <div class="card">
+        <p class="greeting">Dear Manager,</p>
+        <p style="color:#4b5563; font-size:14px; margin-bottom:20px;">
+            A new expense claim has been submitted and is awaiting your review.
+            Please find the details below:
+        </p>
+
+        <table class="info-table">
+            <tr>
+                <td>Expense Title</td>
+                <td><strong th:text="${expenseTitle}">N/A</strong></td>
+            </tr>
+            <tr>
+                <td>Expense #</td>
+                <td><span class="badge" th:text="${expenseNumber}">EXP-000</span></td>
+            </tr>
+            <tr>
+                <td>Amount</td>
+                <td class="amount-cell" th:text="'₹' + ${amount}">₹0.00</td>
+            </tr>
+            <tr>
+                <td>Submitted By</td>
+                <td th:text="${employeeName}">Employee</td>
+            </tr>
+            <tr>
+                <td>Date Submitted</td>
+                <td th:text="${submittedAt}">N/A</td>
+            </tr>
+        </table>
+
+        <div class="action-box">
+            <p>⏰ This expense requires your approval. Please review it at your earliest convenience.</p>
+        </div>
+
+        <p style="font-size:13px; color:#6b7280; margin-top:16px;">
+            Log in to the SEIP portal to approve or reject this expense with comments.
+        </p>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>This is an automated message from the Smart Expense Intelligence Platform.</p>
+        <p style="margin-top:6px;">Please do not reply to this email. © 2024 SEIP. All rights reserved.</p>
+    </div>
+</div>
+</body>
+</html>

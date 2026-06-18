@@ -1,0 +1,106 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'seip-local'
+    environment: 'development'
+
+# Alertmanager configuration (optional, add later)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ['alertmanager:9093']
+
+# Load rules once and periodically evaluate them
+# rule_files:
+#   - "alert_rules.yml"
+
+scrape_configs:
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ─── SEIP Microservices ───
+
+  - job_name: 'api-gateway'
+    metrics_path: /actuator/prometheus
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['seip-api-gateway:8080']
+        labels:
+          service: 'api-gateway'
+          team: 'platform'
+
+  - job_name: 'auth-service'
+    metrics_path: /actuator/prometheus
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['seip-auth:8081']
+        labels:
+          service: 'auth-service'
+          team: 'identity'
+
+  - job_name: 'user-service'
+    metrics_path: /actuator/prometheus
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['seip-user:8082']
+        labels:
+          service: 'user-service'
+          team: 'identity'
+
+  - job_name: 'expense-service'
+    metrics_path: /actuator/prometheus
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['seip-expense:8083']
+        labels:
+          service: 'expense-service'
+          team: 'core'
+
+  - job_name: 'fraud-service'
+    metrics_path: /actuator/prometheus
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['seip-fraud:8084']
+        labels:
+          service: 'fraud-service'
+          team: 'intelligence'
+
+  - job_name: 'notification-service'
+    metrics_path: /actuator/prometheus
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['seip-notification:8085']
+        labels:
+          service: 'notification-service'
+          team: 'platform'
+
+  - job_name: 'audit-service'
+    metrics_path: /actuator/prometheus
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['seip-audit:8086']
+        labels:
+          service: 'audit-service'
+          team: 'compliance'
+
+  - job_name: 'analytics-service'
+    metrics_path: /actuator/prometheus
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['seip-analytics:8087']
+        labels:
+          service: 'analytics-service'
+          team: 'intelligence'
+
+  - job_name: 'ml-service'
+    metrics_path: /metrics
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['seip-ml:8088']
+        labels:
+          service: 'ml-service'
+          team: 'intelligence'

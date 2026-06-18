@@ -1,0 +1,121 @@
+spring:
+  application:
+    name: api-gateway
+
+  # ── Spring Cloud Gateway ─────────────────────────────────────────────────────
+  cloud:
+    gateway:
+      routes:
+
+        # Auth Service (port 8081)
+        - id: auth-service
+          uri: http://${AUTH_SERVICE_HOST:localhost}:${AUTH_SERVICE_PORT:8081}
+          predicates:
+            - Path=/auth/**
+
+        # User / Employee Service (port 8082)
+        - id: user-service
+          uri: http://${USER_SERVICE_HOST:localhost}:${USER_SERVICE_PORT:8082}
+          predicates:
+            - Path=/employees/**, /departments/**, /managers/**
+
+        # Expense Service (port 8083)
+        - id: expense-service
+          uri: http://${EXPENSE_SERVICE_HOST:localhost}:${EXPENSE_SERVICE_PORT:8083}
+          predicates:
+            - Path=/expenses/**, /categories/**
+
+        # Fraud Detection Service (port 8084)
+        - id: fraud-service
+          uri: http://${FRAUD_SERVICE_HOST:localhost}:${FRAUD_SERVICE_PORT:8084}
+          predicates:
+            - Path=/fraud/**
+
+        # Notification Service (port 8085)
+        - id: notification-service
+          uri: http://${NOTIFICATION_SERVICE_HOST:localhost}:${NOTIFICATION_SERVICE_PORT:8085}
+          predicates:
+            - Path=/notifications/**
+
+        # Audit Service (port 8086)
+        - id: audit-service
+          uri: http://${AUDIT_SERVICE_HOST:localhost}:${AUDIT_SERVICE_PORT:8086}
+          predicates:
+            - Path=/audit/**
+
+        # Analytics Service (port 8087)
+        - id: analytics-service
+          uri: http://${ANALYTICS_SERVICE_HOST:localhost}:${ANALYTICS_SERVICE_PORT:8087}
+          predicates:
+            - Path=/analytics/**
+
+      # ── Global CORS ──────────────────────────────────────────────────────────
+      globalcors:
+        add-to-simple-url-handler-mapping: true
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:3000"
+              - "http://localhost:5173"
+              - "http://localhost:3030"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            exposedHeaders:
+              - X-Correlation-Id
+              - X-Auth-User-Id
+            allowCredentials: true
+            maxAge: 3600
+
+      # ── Default filters applied to every route ───────────────────────────────
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+
+# ── Server ────────────────────────────────────────────────────────────────────
+server:
+  port: 8080
+
+# ── Actuator / Management ─────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus, metrics, gateway
+  endpoint:
+    health:
+      show-details: always
+    gateway:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+
+# ── Springdoc / Swagger (WebFlux variant) ─────────────────────────────────────
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+  webjars:
+    prefix: ""
+
+# ── Application-level JWT config ──────────────────────────────────────────────
+app:
+  jwt:
+    secret: ${JWT_SECRET:seip-super-secret-jwt-key-2024-must-be-at-least-64-chars-long-for-hs512}
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+logging:
+  level:
+    com.seip.gateway: DEBUG
+    org.springframework.cloud.gateway: INFO
+    reactor.netty: WARN

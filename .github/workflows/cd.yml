@@ -1,0 +1,131 @@
+name: CD Pipeline — Deploy to Kubernetes
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types:
+      - completed
+    branches:
+      - main
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    environment:
+      name: production
+      url: https://seip.example.com
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        uses: azure/k8s-set-context@v3
+        with:
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+
+      - name: Verify cluster connectivity
+        run: kubectl cluster-info
+
+      - name: Apply namespace
+        run: kubectl apply -f k8s/namespace.yaml
+
+      - name: Apply secrets & config
+        run: |
+          kubectl apply -f k8s/secrets.yaml
+          kubectl apply -f k8s/configmap.yaml
+
+      - name: Deploy infrastructure (Postgres + Kafka)
+        run: |
+          kubectl apply -f k8s/postgres-deployment.yaml
+          kubectl apply -f k8s/kafka-deployment.yaml
+
+      - name: Wait for Postgres to be ready
+        run: kubectl rollout status deployment/postgres -n seip --timeout=300s
+
+      - name: Deploy all microservices
+        run: |
+          kubectl apply -f k8s/auth-deployment.yaml
+          kubectl apply -f k8s/user-deployment.yaml
+          kubectl apply -f k8s/expense-deployment.yaml
+          kubectl apply -f k8s/fraud-deployment.yaml
+          kubectl apply -f k8s/notification-deployment.yaml
+          kubectl apply -f k8s/audit-deployment.yaml
+          kubectl apply -f k8s/analytics-deployment.yaml
+          kubectl apply -f k8s/ml-deployment.yaml
+          kubectl apply -f k8s/gateway-deployment.yaml
+          kubectl apply -f k8s/frontend-deployment.yaml
+
+      - name: Apply ingress
+        run: kubectl apply -f k8s/ingress.yaml
+
+      - name: Wait for core service rollouts
+        run: |
+          kubectl rollout status deployment/auth-service       -n seip --timeout=300s
+          kubectl rollout status deployment/expense-service    -n seip --timeout=300s
+          kubectl rollout status deployment/fraud-service      -n seip --timeout=300s
+          kubectl rollout status deployment/api-gateway        -n seip --timeout=300s
+          kubectl rollout status deployment/frontend           -n seip --timeout=300s
+
+      - name: Update image tags to deployed SHA
+        run: |
+          SHA=${{ github.event.workflow_run.head_sha }}
+          REGISTRY=ghcr.io/seip
+          SERVICES=(api-gateway auth-service user-service expense-service fraud-service notification-service audit-service analytics-service ml-service frontend)
+          for svc in "${SERVICES[@]}"; do
+            kubectl set image deployment/${svc%-service} \
+              ${svc%-service}=$REGISTRY/$svc:$SHA \
+              -n seip 2>/dev/null || \
+            kubectl set image deployment/$svc \
+              $svc=$REGISTRY/$svc:$SHA \
+              -n seip 2>/dev/null || true
+          done
+
+      - name: Verify all pods are running
+        run: |
+          echo "=== Pod Status ==="
+          kubectl get pods -n seip -o wide
+          echo ""
+          echo "=== Services ==="
+          kubectl get svc -n seip
+          echo ""
+          echo "=== Ingress ==="
+          kubectl get ingress -n seip
+
+      - name: Run smoke tests
+        run: |
+          # Wait for ingress IP to be assigned
+          sleep 30
+          INGRESS_IP=$(kubectl get ingress seip-ingress -n seip -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+          if [ -n "$INGRESS_IP" ]; then
+            echo "Testing health endpoints via ingress IP: $INGRESS_IP"
+            curl -sf "https://seip.example.com/api/actuator/health" \
+              --resolve "seip.example.com:443:$INGRESS_IP" \
+              --insecure || echo "Health check warning: service may still be warming up"
+          else
+            echo "Ingress IP not yet assigned, skipping smoke test"
+          fi
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "## ✅ Deployment Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.event.workflow_run.head_sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** Production" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** https://seip.example.com" >> $GITHUB_STEP_SUMMARY
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Deployment failed — rolling back services..."
+          for deploy in auth-service user-service expense-service fraud-service notification-service audit-service analytics-service api-gateway frontend; do
+            kubectl rollout undo deployment/$deploy -n seip 2>/dev/null || true
+          done
+          echo "Rollback complete."

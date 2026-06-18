@@ -1,0 +1,14 @@
+apiVersion: 1
+
+providers:
+  - name: 'SEIP Dashboards'
+    orgId: 1
+    folder: 'SEIP'
+    folderUid: 'seip-dashboards'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

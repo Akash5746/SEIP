@@ -1,0 +1,81 @@
+SEIP - Smart Expense Intelligence Platform
+==========================================
+
+Enterprise-grade microservices platform for automated expense management,
+fraud detection, and compliance. Built with Java 21, Spring Boot 3.3, React 18,
+Kafka, PostgreSQL, MinIO, and full DevOps pipeline.
+
+QUICK START
+-----------
+1. Prerequisites: Docker Desktop, Java 21, Node.js 20, Python 3.11
+
+2. Start infrastructure:
+   docker-compose -f docker-compose.infra.yml up -d
+
+3. Build all Java services:
+   ./mvnw clean package -DskipTests
+
+4. Start all services:
+   docker-compose up -d
+
+5. Access the application:
+   Frontend:   http://localhost:3000
+   API Gateway: http://localhost:8080
+   Kafka UI:   http://localhost:8090
+   MinIO:      http://localhost:9001
+   Grafana:    http://localhost:3001
+   Kibana:     http://localhost:5601
+
+SERVICE PORTS
+-------------
+API Gateway          : 8080
+Auth Service         : 8081
+User Service         : 8082
+Expense Service      : 8083
+Fraud Service        : 8084
+Notification Service : 8085
+Audit Service        : 8086
+Analytics Service    : 8087
+ML Service (Python)  : 8088
+Frontend (React)     : 3000
+PostgreSQL           : 5432
+Kafka                : 9092
+MinIO                : 9000
+Prometheus           : 9090
+Grafana              : 3001
+Elasticsearch        : 9200
+Kibana               : 5601
+
+SWAGGER DOCS
+------------
+Each service exposes Swagger UI:
+  http://localhost:8081/swagger-ui.html  (Auth)
+  http://localhost:8082/swagger-ui.html  (User)
+  http://localhost:8083/swagger-ui.html  (Expense)
+  http://localhost:8084/swagger-ui.html  (Fraud)
+  http://localhost:8085/swagger-ui.html  (Notification)
+  http://localhost:8086/swagger-ui.html  (Audit)
+  http://localhost:8087/swagger-ui.html  (Analytics)
+
+KAFKA TOPICS
+------------
+  expense.submitted           (Expense Service → Notification, Audit)
+  expense.approved            (Expense Service → Notification, Audit)
+  expense.rejected            (Expense Service → Notification, Audit)
+  expense.fraud.check.request (Expense Service → Fraud Service)
+  fraud.analysis.response     (Fraud Service → Expense Service)
+  fraud.detected              (Fraud Service → Notification, Audit)
+
+DEFAULT CREDENTIALS
+-------------------
+PostgreSQL:  seip_user / seip_secret_2024
+MinIO:       seip_minio_user / seip_minio_secret
+Grafana:     admin / seip_grafana_2024
+
+ARCHITECTURE NOTES
+------------------
+- API Gateway handles JWT validation for all downstream services
+- Services trust X-Auth-User-Id and X-Auth-User-Role headers from Gateway
+- All services expose /actuator/prometheus for Prometheus scraping
+- JSON structured logging via Logback for ELK ingestion
+- MinIO provides S3-compatible receipt storage locally

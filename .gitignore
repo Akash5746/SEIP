@@ -1,0 +1,80 @@
+# ─── Java build artifacts ───
+target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# ─── Maven wrapper internals ───
+.mvn/repository/
+
+# ─── Environment / secrets ───
+.env
+*.env.local
+*.env.production
+
+# ─── macOS ───
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ─── Windows ───
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ─── Logs ───
+*.log
+logs/
+*.log.*
+
+# ─── Node / Frontend ───
+node_modules/
+dist/
+build/
+.next/
+.nuxt/
+.cache/
+coverage/
+frontend/.env
+frontend/.env.local
+
+# ─── Python ───
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+htmlcov/
+.coverage
+ml-service/models/*.pkl
+ml-service/models/*.joblib
+
+# ─── IDEs ───
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# ─── Docker ───
+docker-compose.override.yml
+
+# ─── Kubernetes secrets (never commit real secrets) ───
+k8s/secrets-prod.yaml
+k8s/tls-cert.yaml
+
+# ─── Temporary files ───
+*.tmp
+*.bak
+*.swp
+*.orig

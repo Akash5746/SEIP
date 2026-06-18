@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>⚠️ FRAUD ALERT</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Arial', sans-serif; background-color: #0f0f0f; padding: 20px; }
+        .wrapper { max-width: 620px; margin: 0 auto; }
+
+        /* Urgent pulsing header */
+        .header {
+            background: linear-gradient(135deg, #7f1d1d, #991b1b, #7f1d1d);
+            color: white;
+            padding: 28px 32px;
+            border-radius: 12px 12px 0 0;
+            border-top: 5px solid #ef4444;
+            text-align: center;
+        }
+        .header .alert-icon { font-size: 48px; display: block; margin-bottom: 10px; }
+        .header h1 { font-size: 26px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: #fca5a5; }
+        .header .sub { font-size: 14px; color: #fecaca; margin-top: 6px; font-weight: 600; }
+
+        /* Severity badge */
+        .severity-bar {
+            background: #1c0000;
+            padding: 10px 32px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            border-left: 1px solid #7f1d1d;
+            border-right: 1px solid #7f1d1d;
+        }
+        .severity-label { color: #fca5a5; font-size: 13px; font-weight: 700; text-transform: uppercase; }
+        .risk-badge {
+            background: #ef4444;
+            color: white;
+            padding: 4px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 1px;
+        }
+        .risk-score {
+            font-size: 28px;
+            font-weight: 900;
+            color: #fca5a5;
+        }
+
+        /* Main card */
+        .card {
+            background: #1a0000;
+            padding: 28px 32px;
+            border: 1px solid #7f1d1d;
+            border-top: none;
+        }
+        .intro { color: #fca5a5; font-size: 14px; line-height: 1.7; margin-bottom: 24px; }
+
+        /* Details table */
+        .info-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        .info-table tr td {
+            padding: 11px 14px;
+            border-bottom: 1px solid #3b0000;
+            font-size: 14px;
+        }
+        .info-table tr:last-child td { border-bottom: none; }
+        .info-table tr td:first-child { color: #f87171; font-weight: 700; width: 40%; }
+        .info-table tr td:last-child  { color: #fee2e2; font-weight: 500; }
+
+        /* Flag types */
+        .flags-section { margin: 20px 0; }
+        .flags-section .flags-label { color: #f87171; font-size: 13px; font-weight: 700; text-transform: uppercase; margin-bottom: 10px; }
+        .flags-section .flags-list { color: #fecaca; font-size: 14px; line-height: 1.8; }
+        .flag-item { display: inline-block; background: #3b0000; border: 1px solid #7f1d1d; color: #fca5a5; padding: 3px 10px; border-radius: 4px; margin: 2px; font-size: 12px; font-weight: 600; }
+
+        /* Action box */
+        .action-box {
+            background: #450000;
+            border: 2px solid #dc2626;
+            border-radius: 8px;
+            padding: 18px 22px;
+            margin-top: 24px;
+        }
+        .action-box h3 { color: #fca5a5; font-size: 15px; margin-bottom: 10px; }
+        .action-box ul { color: #fecaca; font-size: 13px; padding-left: 20px; line-height: 2; }
+
+        .footer {
+            background: #0a0000;
+            padding: 18px 32px;
+            border: 1px solid #7f1d1d;
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            text-align: center;
+        }
+        .footer p { font-size: 12px; color: #6b7280; }
+        .footer .urgent { color: #f87171; font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <!-- Urgent Header -->
+    <div class="header">
+        <span class="alert-icon">⚠️</span>
+        <h1>⚠️ FRAUD ALERT ⚠️</h1>
+        <div class="sub">IMMEDIATE ATTENTION REQUIRED — Smart Expense Intelligence Platform</div>
+    </div>
+
+    <!-- Severity Bar -->
+    <div class="severity-bar">
+        <span class="severity-label">Risk Level:</span>
+        <span class="risk-badge" th:text="${riskLevel}">HIGH</span>
+        <span class="severity-label">Risk Score:</span>
+        <span class="risk-score" th:text="${riskScore}">0</span>
+        <span class="severity-label">/ 100</span>
+    </div>
+
+    <!-- Main Card -->
+    <div class="card">
+        <p class="intro">
+            Our automated fraud detection system has flagged a suspicious expense for immediate review.
+            This expense has been automatically placed <strong>under review</strong> and requires
+            your immediate attention to determine the appropriate course of action.
+        </p>
+
+        <table class="info-table">
+            <tr>
+                <td>🆔 Expense ID</td>
+                <td th:text="'#' + ${expenseId}">N/A</td>
+            </tr>
+            <tr>
+                <td>👤 Employee ID</td>
+                <td th:text="${employeeId}">N/A</td>
+            </tr>
+            <tr>
+                <td>🎯 Risk Score</td>
+                <td>
+                    <span style="font-size:18px; font-weight:900; color:#ef4444;" th:text="${riskScore}">0</span>
+                    <span style="color:#f87171;"> / 100</span>
+                </td>
+            </tr>
+            <tr>
+                <td>⚡ Risk Level</td>
+                <td>
+                    <span style="background:#ef4444; color:white; padding:3px 12px; border-radius:12px; font-weight:700; font-size:12px;"
+                          th:text="${riskLevel}">HIGH</span>
+                </td>
+            </tr>
+        </table>
+
+        <!-- Fraud Flags Section -->
+        <div class="flags-section">
+            <div class="flags-label">🚩 Fraud Flags Detected</div>
+            <div class="flags-list">
+                <span class="flag-item" th:each="flag : ${#strings.arraySplit(flagTypes, ',')}" th:text="${#strings.trim(flag)}">FLAG</span>
+                <span th:if="${flagTypes == null or #strings.isEmpty(flagTypes)}" class="flag-item">NO FLAGS LISTED</span>
+            </div>
+        </div>
+
+        <!-- Action Required -->
+        <div class="action-box">
+            <h3>🔴 Immediate Actions Required</h3>
+            <ul>
+                <li>Log in to SEIP portal and review the flagged expense immediately</li>
+                <li>Contact the employee for additional documentation and justification</li>
+                <li>Escalate to your compliance team if necessary</li>
+                <li>Approve or reject the expense based on your investigation</li>
+                <li>Document all findings for audit trail purposes</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p class="urgent">⚠️ This is a high-priority automated fraud alert. Do not ignore.</p>
+        <p>Smart Expense Intelligence Platform — Fraud Detection System</p>
+        <p style="margin-top:6px;">© 2024 SEIP. This message contains confidential information.</p>
+    </div>
+</div>
+</body>
+</html>

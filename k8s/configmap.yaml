@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: seip-config
+  namespace: seip
+  labels:
+    app.kubernetes.io/part-of: seip
+data:
+  DB_HOST: seip-postgres
+  DB_PORT: "5432"
+  DB_NAME: seip_db
+  DB_USER: seip_user
+  KAFKA_SERVERS: seip-kafka:29092
+  MINIO_ENDPOINT: http://seip-minio:9000
+  AUTH_SERVICE_HOST: seip-auth
+  USER_SERVICE_HOST: seip-user
+  EXPENSE_SERVICE_HOST: seip-expense
+  FRAUD_SERVICE_HOST: seip-fraud
+  NOTIFICATION_SERVICE_HOST: seip-notification
+  AUDIT_SERVICE_HOST: seip-audit
+  ANALYTICS_SERVICE_HOST: seip-analytics
+  ML_SERVICE_URL: http://seip-ml:8088
+  EXPENSE_SERVICE_URL: http://seip-expense:8083
+  MAIL_HOST: smtp.gmail.com
+  MAIL_PORT: "587"
