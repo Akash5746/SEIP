@@ -308,3 +308,5 @@ smart-expense-platform/
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.
+
+# SEIP
