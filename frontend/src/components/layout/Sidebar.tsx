@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   LayoutDashboard,
@@ -40,6 +40,7 @@ const navItems: NavItem[] = [
 const Sidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const dispatch = useDispatch();
+  const location = useLocation();
   const navigate = useNavigate();
   const { user } = useSelector((state: RootState) => state.auth);
 
@@ -87,31 +88,39 @@ const Sidebar: React.FC = () => {
       <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
         {visibleItems.map((item) => {
           const Icon = item.icon;
+          const isExpenseListRoute =
+            item.path === '/expenses' &&
+            (location.pathname === '/expenses' || /^\/expenses\/\d+$/.test(location.pathname));
+
           return (
             <NavLink
               key={item.path}
               to={item.path}
+              end={item.path === '/expenses' || item.path === '/dashboard'}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${
-                  isActive
+                  (isActive || isExpenseListRoute)
                     ? 'bg-gradient-to-r from-indigo-600/30 to-violet-600/20 text-indigo-300 border border-indigo-500/20'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 } ${collapsed ? 'justify-center' : ''}`
               }
               title={collapsed ? item.label : undefined}
             >
-              {({ isActive }) => (
+              {({ isActive }) => {
+                const active = isActive || isExpenseListRoute;
+
+                return (
                 <>
                   <Icon
                     size={18}
-                    className={`flex-shrink-0 ${isActive ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'}`}
+                    className={`flex-shrink-0 ${active ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'}`}
                   />
                   {!collapsed && <span className="truncate">{item.label}</span>}
-                  {!collapsed && isActive && (
+                  {!collapsed && active && (
                     <span className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0" />
                   )}
                 </>
-              )}
+              )}}
             </NavLink>
           );
         })}

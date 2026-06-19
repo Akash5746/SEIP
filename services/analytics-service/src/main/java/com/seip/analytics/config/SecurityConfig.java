@@ -34,7 +34,8 @@ public class SecurityConfig {
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(PUBLIC_PATHS).permitAll()
-                .requestMatchers("/analytics/**").hasAnyRole("ADMIN", "MANAGER", "FINANCE")
+                // Endpoint-specific authorization is enforced with @PreAuthorize on the controller.
+                .requestMatchers("/analytics/**").authenticated()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(headerAuthFilter, UsernamePasswordAuthenticationFilter.class);

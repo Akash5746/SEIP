@@ -157,6 +157,13 @@ public class FraudAnalysisService {
     }
 
     @Transactional(readOnly = true)
+    public FraudAnalysisDto findAnalysisByExpenseId(Long expenseId) {
+        return fraudAnalysisRepository.findByExpenseId(expenseId)
+                .map(this::toDto)
+                .orElse(null);
+    }
+
+    @Transactional(readOnly = true)
     public FraudDashboardDto getFraudDashboard() {
         long total       = fraudAnalysisRepository.count();
         long highRisk    = fraudAnalysisRepository.countByRiskLevel(RiskLevel.HIGH);

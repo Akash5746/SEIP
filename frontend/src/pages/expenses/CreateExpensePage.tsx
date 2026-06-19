@@ -429,7 +429,9 @@ const CreateExpensePage: React.FC = () => {
               </div>
               <div>
                 <span className="text-slate-500">Category:</span>
-                <span className="text-slate-300 ml-2">{getCategoryName(watchedValues.categoryId)}</span>
+                <span className="text-slate-300 ml-2">
+                  {categories.find((c) => Number(c.id) === Number(watchedValues.categoryId))?.name || '—'}
+                </span>
               </div>
               <div className="col-span-2">
                 <span className="text-slate-500">Description:</span>

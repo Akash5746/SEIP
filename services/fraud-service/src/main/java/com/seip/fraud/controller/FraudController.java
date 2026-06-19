@@ -57,8 +57,11 @@ public class FraudController {
     public ResponseEntity<ApiResponse<FraudAnalysisDto>> getAnalysis(
             @Parameter(description = "Expense ID to retrieve analysis for")
             @PathVariable Long expenseId) {
-        FraudAnalysisDto dto = fraudAnalysisService.getAnalysisByExpenseId(expenseId);
-        return ResponseEntity.ok(ApiResponse.success("Fraud analysis retrieved", dto));
+        FraudAnalysisDto dto = fraudAnalysisService.findAnalysisByExpenseId(expenseId);
+        String message = dto != null
+                ? "Fraud analysis retrieved"
+                : "No fraud analysis available yet";
+        return ResponseEntity.ok(ApiResponse.success(message, dto));
     }
 
     // -------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
@@ -10,29 +10,126 @@ import {
   BarChart2,
   ArrowRight,
   TrendingUp,
+  CalendarDays,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { endOfWeek, format, getISOWeek, startOfWeek } from 'date-fns';
 import { RootState } from '../store';
 import { useGetDashboardStatsQuery, useGetMonthlySpendQuery, useGetRecentExpensesQuery } from '../store/api/analyticsApi';
+import { useGetMyExpensesQuery } from '../store/api/expenseApi';
 import StatsCard from '../components/ui/StatsCard';
 import StatusBadge from '../components/ui/StatusBadge';
 import RiskBadge from '../components/ui/RiskBadge';
 import MonthlySpendChart from '../components/charts/MonthlySpendChart';
+import StatusDonutChart from '../components/charts/StatusDonutChart';
+import SpendCandlestickChart from '../components/charts/SpendCandlestickChart';
 import { StatsCardSkeleton } from '../components/ui/LoadingSkeleton';
-import { ExpenseStatus, RiskLevel } from '../types';
+import { Expense, ExpenseStatus, RiskLevel } from '../types';
+
+const calculatePercentChange = (current: number, previous: number) => {
+  if (previous === 0) {
+    return current === 0 ? 0 : 100;
+  }
+
+  return Math.round(((current - previous) / previous) * 100);
+};
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useSelector((state: RootState) => state.auth);
-  const currentYear = new Date().getFullYear();
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
 
   const { data: statsData, isLoading: statsLoading } = useGetDashboardStatsQuery();
   const { data: monthlyData, isLoading: monthlyLoading } = useGetMonthlySpendQuery({ year: currentYear });
   const { data: recentData, isLoading: recentLoading } = useGetRecentExpensesQuery({ limit: 6 });
+  const { data: expensesData, isLoading: expensesLoading } = useGetMyExpensesQuery({ page: 0, size: 200 });
 
   const stats = statsData?.data;
   const monthlySpend = monthlyData?.data ?? [];
   const recentExpenses = recentData?.data ?? [];
+  const allExpenses = expensesData?.data?.content ?? [];
+  const currentMonthStats = monthlySpend.find((entry) => entry.month === currentMonth);
+  const previousMonthStats = currentMonth > 1
+    ? monthlySpend.find((entry) => entry.month === currentMonth - 1)
+    : undefined;
+  const totalExpensesTrend = previousMonthStats
+    ? {
+        value: calculatePercentChange(
+          currentMonthStats?.expenseCount ?? 0,
+          previousMonthStats.expenseCount
+        ),
+        label: 'vs last month',
+      }
+    : undefined;
+  const thisMonthTrend = previousMonthStats
+    ? {
+        value: calculatePercentChange(
+          currentMonthStats?.totalAmount ?? 0,
+          previousMonthStats.totalAmount
+        ),
+        label: 'vs last month',
+      }
+    : undefined;
+  const statusDistribution = Object.entries(
+    recentExpenses.reduce<Record<string, number>>((acc, expense) => {
+      acc[expense.status] = (acc[expense.status] ?? 0) + 1;
+      return acc;
+    }, {})
+  ).map(([label, value]) => ({ label: label.replace(/_/g, ' '), value }));
+  const weeklyBuckets = useMemo(() => {
+    const grouped = allExpenses.reduce<Record<string, { label: string; start: Date; end: Date; expenses: Expense[] }>>((acc, expense) => {
+      const baseDate = new Date(expense.expenseDate || expense.createdAt);
+      const weekStart = startOfWeek(baseDate, { weekStartsOn: 1 });
+      const weekEnd = endOfWeek(baseDate, { weekStartsOn: 1 });
+      const key = `${format(weekStart, 'yyyy-MM-dd')}`;
+
+      if (!acc[key]) {
+        acc[key] = {
+          label: `W${getISOWeek(baseDate)} · ${format(weekStart, 'MMM d')}`,
+          start: weekStart,
+          end: weekEnd,
+          expenses: [],
+        };
+      }
+
+      acc[key].expenses.push(expense);
+      return acc;
+    }, {});
+
+    return Object.values(grouped)
+      .sort((a, b) => a.start.getTime() - b.start.getTime())
+      .map((bucket, index, buckets) => {
+        const total = bucket.expenses.reduce((sum, expense) => sum + expense.amount, 0);
+        const previousTotal = index > 0
+          ? buckets[index - 1].expenses.reduce((sum, expense) => sum + expense.amount, 0)
+          : total;
+        const nextTotal = index < buckets.length - 1
+          ? buckets[index + 1].expenses.reduce((sum, expense) => sum + expense.amount, 0)
+          : total;
+
+        return {
+          ...bucket,
+          total,
+          candle: {
+            label: bucket.label,
+            open: previousTotal,
+            close: total,
+            high: Math.max(previousTotal, total, nextTotal),
+            low: Math.min(previousTotal, total, nextTotal),
+          },
+        };
+      });
+  }, [allExpenses]);
+  const [selectedWeekLabel, setSelectedWeekLabel] = useState<string | null>(null);
+  const selectedWeek = weeklyBuckets.find((bucket) => bucket.label === selectedWeekLabel)
+    ?? (weeklyBuckets.length > 0 ? weeklyBuckets[weeklyBuckets.length - 1] : undefined);
+
+  useEffect(() => {
+    if (!selectedWeekLabel && weeklyBuckets.length > 0) {
+      setSelectedWeekLabel(weeklyBuckets[weeklyBuckets.length - 1].label);
+    }
+  }, [selectedWeekLabel, weeklyBuckets]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -75,7 +172,7 @@ const DashboardPage: React.FC = () => {
             value={stats?.totalExpenses ?? 0}
             subtitle="All time submissions"
             icon={Receipt}
-            trend={{ value: 12, label: 'vs last month' }}
+            trend={totalExpensesTrend}
             colorClass="card-indigo"
             gradient="from-indigo-500 to-violet-600"
           />
@@ -92,7 +189,7 @@ const DashboardPage: React.FC = () => {
             value={`$${((stats?.thisMonthAmount ?? 0) / 1000).toFixed(1)}k`}
             subtitle="Total spend"
             icon={DollarSign}
-            trend={{ value: -5, label: 'vs last month' }}
+            trend={thisMonthTrend}
             colorClass="card-emerald"
             gradient="from-emerald-500 to-teal-600"
           />
@@ -178,6 +275,99 @@ const DashboardPage: React.FC = () => {
               );
             })}
           </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="glass-card p-5">
+          <div className="mb-4">
+            <h3 className="font-semibold text-white">Recent Status Mix</h3>
+            <p className="mt-0.5 text-xs text-slate-500">Donut view of the latest 6 expenses</p>
+          </div>
+          {recentLoading ? (
+            <div className="skeleton h-60 w-full" />
+          ) : statusDistribution.length > 0 ? (
+            <>
+              <StatusDonutChart data={statusDistribution} total={recentExpenses.length} height={240} />
+              <div className="mt-3 flex flex-wrap gap-2">
+                {statusDistribution.map((item) => (
+                  <div key={item.label} className="rounded-full border border-slate-700 bg-slate-800/60 px-3 py-1 text-xs text-slate-300">
+                    {item.label}: {item.value}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="flex h-60 items-center justify-center text-slate-600">
+              <p>No recent expense data available</p>
+            </div>
+          )}
+        </div>
+
+        <div className="lg:col-span-2 glass-card p-5">
+          <div className="mb-4">
+            <h3 className="font-semibold text-white">Weekly Spend Candles</h3>
+            <p className="mt-0.5 text-xs text-slate-500">Click any week candle to inspect that week’s expense activity</p>
+          </div>
+          {expensesLoading ? (
+            <div className="skeleton h-60 w-full" />
+          ) : weeklyBuckets.length > 0 ? (
+            <div className="space-y-4">
+              <SpendCandlestickChart
+                data={weeklyBuckets.map((bucket) => bucket.candle)}
+                activeLabel={selectedWeek?.label}
+                onSelect={(item) => setSelectedWeekLabel(item.label)}
+                height={260}
+              />
+              {selectedWeek && (
+                <div className="rounded-2xl border border-slate-700 bg-slate-900/40 p-4">
+                  <div className="mb-3 flex items-start justify-between gap-4">
+                    <div>
+                      <p className="flex items-center gap-2 text-sm font-semibold text-white">
+                        <CalendarDays size={15} className="text-indigo-400" />
+                        {selectedWeek.label}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {format(selectedWeek.start, 'MMM d')} - {format(selectedWeek.end, 'MMM d, yyyy')}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-white">${selectedWeek.total.toLocaleString()}</p>
+                      <p className="text-xs text-slate-500">{selectedWeek.expenses.length} expense(s)</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {selectedWeek.expenses
+                      .sort((a: Expense, b: Expense) => new Date(b.expenseDate).getTime() - new Date(a.expenseDate).getTime())
+                      .map((expense: Expense) => (
+                        <button
+                          key={expense.id}
+                          onClick={() => navigate(`/expenses/${expense.id}`)}
+                          className="flex w-full items-center justify-between rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-left transition-colors hover:border-indigo-500/30 hover:bg-slate-900"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-white">{expense.title}</p>
+                            <p className="truncate text-xs text-slate-500">
+                              {expense.merchantName} · {format(new Date(expense.expenseDate), 'EEE, MMM d')}
+                            </p>
+                          </div>
+                          <div className="ml-4 flex items-center gap-3">
+                            <StatusBadge status={expense.status as ExpenseStatus} size="sm" />
+                            <span className="text-sm font-semibold text-white">
+                              {expense.currency} {expense.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex h-60 items-center justify-center text-slate-600">
+              <p>No weekly expense history available</p>
+            </div>
+          )}
         </div>
       </div>
 

@@ -14,8 +14,9 @@ import {
   Download,
   ExternalLink,
   Hash,
+  Send,
 } from 'lucide-react';
-import { useGetExpenseByIdQuery } from '../../store/api/expenseApi';
+import { useGetExpenseByIdQuery, useSubmitExpenseMutation } from '../../store/api/expenseApi';
 import { useGetFraudAnalysisQuery } from '../../store/api/fraudApi';
 import StatusBadge from '../../components/ui/StatusBadge';
 import RiskBadge from '../../components/ui/RiskBadge';
@@ -27,9 +28,11 @@ const ExpenseDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const expenseId = parseInt(id ?? '0', 10);
   const [activeTab, setActiveTab] = useState<'details' | 'fraud' | 'receipts'>('details');
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const { data: expenseData, isLoading: expenseLoading } = useGetExpenseByIdQuery(expenseId, { skip: !expenseId });
   const { data: fraudData, isLoading: fraudLoading } = useGetFraudAnalysisQuery(expenseId, { skip: !expenseId });
+  const [submitExpense, { isLoading: isSubmitting }] = useSubmitExpenseMutation();
 
   const expense = expenseData?.data;
   const fraud = fraudData?.data;
@@ -61,6 +64,16 @@ const ExpenseDetailPage: React.FC = () => {
       ? 'text-amber-400'
       : 'text-emerald-400';
 
+  const handleSubmitForApproval = async () => {
+    setSubmitError(null);
+
+    try {
+      await submitExpense(expenseId).unwrap();
+    } catch {
+      setSubmitError('Failed to submit expense. Please try again.');
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-5">
       {/* Back + header */}
@@ -82,15 +95,44 @@ const ExpenseDetailPage: React.FC = () => {
               <Hash size={12} /> {expense.expenseNumber}
             </span>
             <span>·</span>
-            <span>Submitted {format(new Date(expense.submittedAt || expense.createdAt), 'MMM d, yyyy')}</span>
+            <span>
+              {expense.submittedAt
+                ? `Submitted ${format(new Date(expense.submittedAt), 'MMM d, yyyy')}`
+                : `Created ${format(new Date(expense.createdAt), 'MMM d, yyyy')}`}
+            </span>
           </div>
         </div>
-        <div className="text-right">
+        <div className="text-right space-y-3">
           <p className="text-3xl font-bold gradient-text">
             {expense.currency} {expense.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </p>
+          {expense.status === 'DRAFT' && (
+            <button
+              onClick={handleSubmitForApproval}
+              disabled={isSubmitting}
+              className="btn-primary text-sm ml-auto"
+            >
+              {isSubmitting ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Submitting...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Send size={15} />
+                  Submit for Approval
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </div>
+
+      {submitError && (
+        <div className="rounded-lg border border-rose-800 bg-rose-950 px-4 py-3 text-sm text-rose-300">
+          {submitError}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-800/50 p-1 rounded-xl w-fit">

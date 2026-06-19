@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
-import { Search, Plus, SlidersHorizontal, Eye, Trash2, ChevronDown } from 'lucide-react';
+import { Search, Plus, Eye, Trash2, ChevronDown } from 'lucide-react';
 import { useGetMyExpensesQuery, useDeleteExpenseMutation } from '../../store/api/expenseApi';
 import StatusBadge from '../../components/ui/StatusBadge';
 import RiskBadge from '../../components/ui/RiskBadge';
@@ -69,33 +69,37 @@ const ExpenseListPage: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <div className="glass-card p-4">
-        <div className="flex flex-col sm:flex-row gap-3">
+      <div className="glass-card p-4 sm:p-5">
+        <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
           {/* Search */}
-          <form onSubmit={handleSearch} className="flex-1 relative">
+          <form onSubmit={handleSearch} className="flex-1 relative min-w-0">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search by title, merchant, or expense #..."
-              className="form-input pl-9 pr-4 w-full"
+              className="form-input h-11 pl-9 pr-4 w-full"
             />
           </form>
 
           {/* Status filter */}
-          <div className="relative">
-            <SlidersHorizontal size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <select
-              value={status}
-              onChange={(e) => { setStatus(e.target.value); setPage(0); }}
-              className="form-input pl-9 pr-8 appearance-none min-w-[160px]"
-            >
-              {STATUS_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+          <div className="w-full lg:w-auto lg:min-w-[220px]">
+            <label className="mb-1.5 block text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
+              Status
+            </label>
+            <div className="relative">
+              <select
+                value={status}
+                onChange={(e) => { setStatus(e.target.value); setPage(0); }}
+                className="form-input h-11 w-full appearance-none pr-10"
+              >
+                {STATUS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+            </div>
           </div>
         </div>
       </div>
