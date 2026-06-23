@@ -12,19 +12,25 @@ import com.seip.expense.mapper.ExpenseMapper;
 import com.seip.expense.repository.ExpenseRepository;
 import com.seip.expense.service.ExpenseCategoryService;
 import com.seip.expense.service.ExpenseService;
+import com.seip.expense.service.ReceiptService;
 import com.seip.expense.util.ExpenseNumberGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
@@ -49,6 +55,12 @@ class ExpenseServiceTest {
 
     @Mock
     private ExpenseMapper expenseMapper;
+
+    @Mock
+    private JdbcTemplate jdbcTemplate;
+
+    @Mock
+    private ReceiptService receiptService;
 
     @InjectMocks
     private ExpenseService expenseService;
@@ -294,7 +306,12 @@ class ExpenseServiceTest {
         when(expenseMapper.toDto(any())).thenReturn(approvedDto);
 
         // Act
-        ExpenseDto result = expenseService.approveExpense(2L, 200L, "Approved by manager");
+        when(jdbcTemplate.query(anyString(), ArgumentMatchers.<org.springframework.jdbc.core.RowMapper<Boolean>>any(), eq(100L)))
+                .thenReturn(List.of(true));
+        when(jdbcTemplate.query(anyString(), ArgumentMatchers.<org.springframework.jdbc.core.RowMapper<Long>>any(), eq(200L)))
+                .thenReturn(List.of(1L));
+
+        ExpenseDto result = expenseService.approveExpense(2L, 200L, "ROLE_MANAGER", "Approved by manager");
 
         // Assert
         assertThat(result).isNotNull();
@@ -321,7 +338,12 @@ class ExpenseServiceTest {
         when(expenseMapper.toDto(any())).thenReturn(rejectedDto);
 
         // Act
-        ExpenseDto result = expenseService.rejectExpense(2L, 200L, rejectionNotes);
+        when(jdbcTemplate.query(anyString(), ArgumentMatchers.<org.springframework.jdbc.core.RowMapper<Boolean>>any(), eq(100L)))
+                .thenReturn(List.of(true));
+        when(jdbcTemplate.query(anyString(), ArgumentMatchers.<org.springframework.jdbc.core.RowMapper<Long>>any(), eq(200L)))
+                .thenReturn(List.of(1L));
+
+        ExpenseDto result = expenseService.rejectExpense(2L, 200L, "ROLE_MANAGER", rejectionNotes);
 
         // Assert
         assertThat(result).isNotNull();
@@ -338,9 +360,36 @@ class ExpenseServiceTest {
     void testApproveExpense_draftStatus_throwsException() {
         when(expenseRepository.findById(1L)).thenReturn(Optional.of(draftExpense));
 
-        assertThatThrownBy(() -> expenseService.approveExpense(1L, 200L, "notes"))
+        assertThatThrownBy(() -> expenseService.approveExpense(1L, 200L, "ROLE_ADMIN", "notes"))
                 .isInstanceOf(InvalidExpenseStateException.class)
                 .hasMessageContaining("DRAFT");
+    }
+
+    @Test
+    @DisplayName("getPendingExpensesForManager restricts admin queue to employee submitters")
+    void testGetPendingExpensesForManager_adminFiltersToEmployees() {
+        when(jdbcTemplate.queryForList(anyString(), eq(Long.class))).thenReturn(List.of(100L, 101L));
+        when(expenseRepository.findByEmployeeIdInAndStatusIn(
+                eq(List.of(100L, 101L)),
+                eq(List.of(ExpenseStatus.SUBMITTED, ExpenseStatus.UNDER_REVIEW)),
+                any()
+        )).thenReturn(new PageImpl<>(List.of(submittedExpense), PageRequest.of(0, 20), 1));
+        when(expenseMapper.toSummaryDto(any(Expense.class))).thenAnswer(invocation -> {
+            Expense expense = invocation.getArgument(0);
+            return com.seip.expense.dto.ExpenseSummaryDto.builder()
+                    .id(expense.getId())
+                    .employeeId(expense.getEmployeeId())
+                    .title(expense.getTitle())
+                    .amount(expense.getAmount())
+                    .currency(expense.getCurrency())
+                    .status(expense.getStatus())
+                    .build();
+        });
+
+        var result = expenseService.getPendingExpensesForManager(999L, "ROLE_ADMIN", PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).hasSize(1);
+        verify(expenseRepository, never()).findByStatusIn(any(), any());
     }
 
     // -----------------------------------------------------------------------

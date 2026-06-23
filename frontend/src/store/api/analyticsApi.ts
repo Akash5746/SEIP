@@ -1,5 +1,5 @@
 import { baseApi } from './baseApi';
-import { ApiResponse, MonthlySpend, CategorySpend, DepartmentSpend } from '../../types';
+import { ApiResponse, MonthlySpend, CategorySpend, DepartmentSpend, ManagerDashboard } from '../../types';
 
 interface ReportFilters {
   startDate?: string;
@@ -46,6 +46,11 @@ export const analyticsApi = baseApi.injectEndpoints({
       providesTags: ['Analytics'],
     }),
 
+    getManagerDashboard: builder.query<ApiResponse<ManagerDashboard>, void>({
+      query: () => '/analytics/manager/dashboard',
+      providesTags: ['Analytics'],
+    }),
+
     getRecentExpenses: builder.query<ApiResponse<{
       id: number;
       title: string;
@@ -61,6 +66,18 @@ export const analyticsApi = baseApi.injectEndpoints({
       }),
       providesTags: ['Analytics', 'Expense'],
     }),
+
+    getEmployeeReport: builder.query<ApiResponse<{
+      employeeId: number;
+      totalAmount: number;
+      totalClaims: number;
+      approvedAmount: number;
+      rejectedAmount: number;
+      pendingAmount: number;
+    }>, number>({
+      query: (employeeId) => `/analytics/employees/${employeeId}/report`,
+      providesTags: ['Analytics'],
+    }),
   }),
 });
 
@@ -69,5 +86,7 @@ export const {
   useGetCategorySpendQuery,
   useGetDepartmentSpendQuery,
   useGetDashboardStatsQuery,
+  useGetManagerDashboardQuery,
   useGetRecentExpensesQuery,
+  useGetEmployeeReportQuery,
 } = analyticsApi;

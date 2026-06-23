@@ -26,7 +26,7 @@ public class FraudCheckRequestConsumer {
      * then publishes the result event. HIGH risk results trigger an additional alert event.
      */
     @KafkaListener(
-            topics   = "expense.fraud.check.request",
+            topics   = {"expense.fraud.check.request", "fraud.check.request"},
             groupId  = "fraud-service",
             containerFactory = "kafkaListenerContainerFactory"
     )

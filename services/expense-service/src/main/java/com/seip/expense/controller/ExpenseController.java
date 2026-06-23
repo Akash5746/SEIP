@@ -78,11 +78,17 @@ public class ExpenseController {
     @GetMapping("/pending-approvals")
     @Operation(summary = "Get pending expenses for approval (alias for /manager/queue)")
     public ResponseEntity<ApiResponse<PageResponse<ExpenseSummaryDto>>> getPendingApprovalsAlias(
+            @RequestHeader("X-Auth-User-Id") Long reviewerId,
+            @RequestHeader("X-Auth-User-Role") String reviewerRole,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String riskLevel) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("submittedAt").ascending());
-        PageResponse<ExpenseSummaryDto> response = expenseService.getPendingExpensesForManager(pageable);
+        PageResponse<ExpenseSummaryDto> response = expenseService.getPendingExpensesForManager(
+                reviewerId,
+                reviewerRole,
+                pageable
+        );
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -126,21 +132,56 @@ public class ExpenseController {
     @GetMapping("/manager/queue")
     @Operation(summary = "Get pending expenses for manager review (MANAGER/ADMIN only)")
     public ResponseEntity<ApiResponse<PageResponse<ExpenseSummaryDto>>> getPendingQueue(
+            @RequestHeader("X-Auth-User-Id") Long reviewerId,
+            @RequestHeader("X-Auth-User-Role") String reviewerRole,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("submittedAt").ascending());
-        PageResponse<ExpenseSummaryDto> response = expenseService.getPendingExpensesForManager(pageable);
+        PageResponse<ExpenseSummaryDto> response = expenseService.getPendingExpensesForManager(
+                reviewerId,
+                reviewerRole,
+                pageable
+        );
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/manager/employee/{employeeAuthUserId}")
+    @Operation(summary = "Get expense history for an authorized employee (MANAGER/ADMIN only)")
+    public ResponseEntity<ApiResponse<PageResponse<ExpenseSummaryDto>>> getAuthorizedEmployeeExpenses(
+            @RequestHeader("X-Auth-User-Id") Long requesterAuthUserId,
+            @RequestHeader("X-Auth-User-Role") String requesterRole,
+            @PathVariable Long employeeAuthUserId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("expenseDate").descending());
+        PageResponse<ExpenseSummaryDto> response = expenseService.getExpensesForAuthorizedEmployee(
+                requesterAuthUserId,
+                requesterRole,
+                employeeAuthUserId,
+                pageable
+        );
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/manager/item/{id}")
+    @Operation(summary = "Get expense details for an authorized department employee (MANAGER/ADMIN only)")
+    public ResponseEntity<ApiResponse<ExpenseDto>> getAuthorizedExpenseById(
+            @RequestHeader("X-Auth-User-Id") Long requesterAuthUserId,
+            @RequestHeader("X-Auth-User-Role") String requesterRole,
+            @PathVariable Long id) {
+        ExpenseDto dto = expenseService.getExpenseByIdForAuthorizedUser(requesterAuthUserId, requesterRole, id);
+        return ResponseEntity.ok(ApiResponse.success(dto));
     }
 
     @PostMapping("/{id}/approve")
     @Operation(summary = "Approve an expense (MANAGER/ADMIN only)")
     public ResponseEntity<ApiResponse<ExpenseDto>> approveExpense(
             @RequestHeader("X-Auth-User-Id") Long reviewerId,
+            @RequestHeader("X-Auth-User-Role") String reviewerRole,
             @PathVariable Long id,
             @RequestBody(required = false) ReviewExpenseRequest request) {
         String notes = request != null ? request.getNotes() : null;
-        ExpenseDto dto = expenseService.approveExpense(id, reviewerId, notes);
+        ExpenseDto dto = expenseService.approveExpense(id, reviewerId, reviewerRole, notes);
         return ResponseEntity.ok(ApiResponse.success(dto, "Expense approved"));
     }
 
@@ -148,10 +189,22 @@ public class ExpenseController {
     @Operation(summary = "Reject an expense (MANAGER/ADMIN only)")
     public ResponseEntity<ApiResponse<ExpenseDto>> rejectExpense(
             @RequestHeader("X-Auth-User-Id") Long reviewerId,
+            @RequestHeader("X-Auth-User-Role") String reviewerRole,
             @PathVariable Long id,
             @Valid @RequestBody ReviewExpenseRequest request) {
-        ExpenseDto dto = expenseService.rejectExpense(id, reviewerId, request.getNotes());
+        ExpenseDto dto = expenseService.rejectExpense(id, reviewerId, reviewerRole, request.getNotes());
         return ResponseEntity.ok(ApiResponse.success(dto, "Expense rejected"));
+    }
+
+    @PostMapping("/{id}/request-changes")
+    @Operation(summary = "Request changes on an expense (MANAGER/ADMIN only)")
+    public ResponseEntity<ApiResponse<ExpenseDto>> requestChanges(
+            @RequestHeader("X-Auth-User-Id") Long reviewerId,
+            @RequestHeader("X-Auth-User-Role") String reviewerRole,
+            @PathVariable Long id,
+            @Valid @RequestBody ReviewExpenseRequest request) {
+        ExpenseDto dto = expenseService.requestChanges(id, reviewerId, reviewerRole, request.getNotes());
+        return ResponseEntity.ok(ApiResponse.success(dto, "Changes requested"));
     }
 
     @GetMapping("/check-duplicate")

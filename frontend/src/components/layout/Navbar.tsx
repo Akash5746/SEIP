@@ -5,12 +5,14 @@ import { Bell, ChevronDown, User, Settings, LogOut } from 'lucide-react';
 import { RootState } from '../../store';
 import { useDispatch } from 'react-redux';
 import { logout } from '../../store/slices/authSlice';
+import { formatRoleLabel, normalizeRole } from '../../utils/roles';
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/expenses': 'Expense History',
   '/expenses/new': 'Create Expense',
   '/manager/queue': 'Approval Queue',
+  '/manager/employees': 'Employee Review',
   '/fraud': 'Fraud Dashboard',
   '/reports': 'Reports & Analytics',
   '/admin': 'Admin Panel',
@@ -19,9 +21,9 @@ const PAGE_TITLES: Record<string, string> = {
 };
 
 const roleColors: Record<string, string> = {
-  ADMIN: 'bg-rose-900 text-rose-300 border border-rose-800',
-  MANAGER: 'bg-indigo-900 text-indigo-300 border border-indigo-800',
-  EMPLOYEE: 'bg-emerald-900 text-emerald-300 border border-emerald-800',
+  ROLE_ADMIN: 'bg-rose-900 text-rose-300 border border-rose-800',
+  ROLE_MANAGER: 'bg-indigo-900 text-indigo-300 border border-indigo-800',
+  ROLE_EMPLOYEE: 'bg-emerald-900 text-emerald-300 border border-emerald-800',
 };
 
 const Navbar: React.FC = () => {
@@ -37,6 +39,9 @@ const Navbar: React.FC = () => {
     if (location.pathname.startsWith('/expenses/') && location.pathname !== '/expenses/new') {
       return 'Expense Details';
     }
+    if (location.pathname.startsWith('/manager/employees/')) {
+      return 'Employee Review';
+    }
     return PAGE_TITLES[location.pathname] || 'SEIP';
   };
 
@@ -46,7 +51,8 @@ const Navbar: React.FC = () => {
   };
 
   const userInitials = user?.username ? user.username.slice(0, 2).toUpperCase() : 'US';
-  const roleClass = user ? roleColors[user.role] || roleColors.EMPLOYEE : roleColors.EMPLOYEE;
+  const normalizedRole = normalizeRole(user?.role);
+  const roleClass = roleColors[normalizedRole] || roleColors.ROLE_EMPLOYEE;
 
   return (
     <header className="h-14 border-b border-slate-800 bg-surface/80 backdrop-blur-md flex items-center px-6 gap-4 sticky top-0 z-30">
@@ -60,7 +66,7 @@ const Navbar: React.FC = () => {
         {/* Role badge */}
         {user && (
           <span className={`hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${roleClass}`}>
-            {user.role}
+            {formatRoleLabel(user.role)}
           </span>
         )}
 

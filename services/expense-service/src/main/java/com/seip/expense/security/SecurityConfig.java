@@ -36,6 +36,7 @@ public class SecurityConfig {
                         .requestMatchers("/expenses/manager/**").hasAnyRole("MANAGER", "ADMIN")
                         .requestMatchers("/expenses/*/approve").hasAnyRole("MANAGER", "ADMIN")
                         .requestMatchers("/expenses/*/reject").hasAnyRole("MANAGER", "ADMIN")
+                        .requestMatchers("/expenses/*/request-changes").hasAnyRole("MANAGER", "ADMIN")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(headerAuthFilter, UsernamePasswordAuthenticationFilter.class);

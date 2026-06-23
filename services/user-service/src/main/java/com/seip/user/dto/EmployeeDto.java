@@ -16,6 +16,8 @@ public class EmployeeDto {
 
     private Long id;
     private Long authUserId;
+    private String username;
+    private String role;
     private String employeeCode;
     private String firstName;
     private String lastName;

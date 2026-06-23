@@ -8,6 +8,7 @@ import com.seip.expense.entity.Expense;
 import com.seip.expense.entity.ExpenseItem;
 import com.seip.expense.entity.Receipt;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;
 
 import java.util.List;
@@ -18,6 +19,7 @@ public interface ExpenseMapper {
 
     ExpenseDto toDto(Expense expense);
 
+    @Mapping(target = "categoryName", source = "category.name")
     ExpenseSummaryDto toSummaryDto(Expense expense);
 
     ExpenseItemDto toItemDto(ExpenseItem item);

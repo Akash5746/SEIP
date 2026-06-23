@@ -55,9 +55,15 @@ public class FraudController {
     @GetMapping("/analysis/{expenseId}")
     @Operation(summary = "Retrieve fraud analysis for a specific expense")
     public ResponseEntity<ApiResponse<FraudAnalysisDto>> getAnalysis(
+            @RequestHeader("X-Auth-User-Id") Long requesterAuthUserId,
+            @RequestHeader(value = "X-Auth-User-Role", required = false) String requesterRole,
             @Parameter(description = "Expense ID to retrieve analysis for")
             @PathVariable Long expenseId) {
-        FraudAnalysisDto dto = fraudAnalysisService.findAnalysisByExpenseId(expenseId);
+        FraudAnalysisDto dto = fraudAnalysisService.getAuthorizedAnalysisByExpenseId(
+                requesterAuthUserId,
+                requesterRole,
+                expenseId
+        );
         String message = dto != null
                 ? "Fraud analysis retrieved"
                 : "No fraud analysis available yet";

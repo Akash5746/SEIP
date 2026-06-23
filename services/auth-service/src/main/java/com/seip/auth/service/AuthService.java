@@ -15,6 +15,9 @@ import com.seip.auth.repository.UserRepository;
 import com.seip.auth.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -24,6 +27,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,6 +44,20 @@ public class AuthService {
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
+    private final JdbcTemplate jdbcTemplate;
+
+    private static final Map<String, String> DEFAULT_DEPARTMENT_CODES = Map.ofEntries(
+            Map.entry("ENGINEERING", "ENG"),
+            Map.entry("MARKETING", "MKT"),
+            Map.entry("SALES", "SLS"),
+            Map.entry("FINANCE", "FIN"),
+            Map.entry("OPERATIONS", "OPS"),
+            Map.entry("HUMAN RESOURCES", "HR"),
+            Map.entry("LEGAL", "LGL"),
+            Map.entry("PRODUCT", "PRD"),
+            Map.entry("DESIGN", "DSN"),
+            Map.entry("CUSTOMER SUPPORT", "CST")
+    );
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -53,9 +73,7 @@ public class AuthService {
         }
 
         // Resolve role — default to ROLE_EMPLOYEE if not valid
-        String roleName = (request.getRole() != null && !request.getRole().isBlank())
-                ? request.getRole()
-                : "ROLE_EMPLOYEE";
+        String roleName = normalizeRoleName(request.getRole());
 
         Role role = roleRepository.findByName(roleName)
                 .orElseGet(() -> roleRepository.findByName("ROLE_EMPLOYEE")
@@ -74,6 +92,8 @@ public class AuthService {
                 .build();
         user.getRoles().add(role);
         User savedUser = userRepository.save(user);
+        synchronizeLegacyRoleColumn(savedUser.getId(), roleName);
+        ensureEmployeeProfile(savedUser, request.getDepartment(), roleName);
 
         log.info("Registered new user: {} with role: {}", savedUser.getUsername(), roleName);
 
@@ -95,6 +115,9 @@ public class AuthService {
         );
 
         User user = (User) authentication.getPrincipal();
+        String primaryRole = extractPrimaryRole(user);
+        synchronizeLegacyRoleColumn(user.getId(), primaryRole);
+        ensureEmployeeProfile(user, null, primaryRole);
         log.info("User logged in: {}", user.getUsername());
 
         // Revoke any existing refresh tokens before issuing a new one
@@ -146,6 +169,27 @@ public class AuthService {
                 .build();
     }
 
+    @EventListener(ApplicationReadyEvent.class)
+    @Transactional
+    public void reconcileLegacyRoleColumn() {
+        int updated = jdbcTemplate.update("""
+                UPDATE auth.users u
+                SET role = roles.role_name
+                FROM (
+                    SELECT ur.user_id, MAX(r.name) AS role_name
+                    FROM auth.user_roles ur
+                    JOIN auth.roles r ON r.id = ur.role_id
+                    GROUP BY ur.user_id
+                ) roles
+                WHERE u.id = roles.user_id
+                  AND COALESCE(u.role, '') <> roles.role_name
+                """);
+
+        if (updated > 0) {
+            log.info("Reconciled legacy auth.users.role values for {} user(s)", updated);
+        }
+    }
+
     // ── private helpers ──────────────────────────────────────────────────────
 
     private AuthResponse buildAuthResponse(User user, String accessToken, String refreshToken) {
@@ -164,5 +208,139 @@ public class AuthService {
                 .email(user.getEmail())
                 .role(primaryRole)
                 .build();
+    }
+
+    private String normalizeRoleName(String requestedRole) {
+        if (requestedRole == null || requestedRole.isBlank()) {
+            return "ROLE_EMPLOYEE";
+        }
+
+        String normalized = requestedRole.trim().toUpperCase();
+        return normalized.startsWith("ROLE_") ? normalized : "ROLE_" + normalized;
+    }
+
+    private String extractPrimaryRole(User user) {
+        return user.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .findFirst()
+                .orElse("ROLE_EMPLOYEE");
+    }
+
+    private void synchronizeLegacyRoleColumn(Long userId, String roleName) {
+        jdbcTemplate.update("""
+                UPDATE auth.users
+                SET role = ?
+                WHERE id = ?
+                  AND COALESCE(role, '') <> ?
+                """, roleName, userId, roleName);
+    }
+
+    private void ensureEmployeeProfile(User user, String requestedDepartment, String roleName) {
+        Integer existing = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM users.employees WHERE auth_user_id = ?",
+                Integer.class,
+                user.getId()
+        );
+
+        Long departmentId = resolveDepartmentId(requestedDepartment);
+        String designation = "ROLE_MANAGER".equals(roleName) ? "Manager" : "Employee";
+
+        if (existing != null && existing > 0) {
+            if (departmentId != null) {
+                jdbcTemplate.update("""
+                        UPDATE users.employees
+                        SET email = ?,
+                            designation = COALESCE(designation, ?),
+                            department_id = COALESCE(department_id, ?),
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE auth_user_id = ?
+                        """,
+                        user.getEmail(),
+                        designation,
+                        departmentId,
+                        user.getId()
+                );
+            }
+            return;
+        }
+
+        jdbcTemplate.update("""
+                INSERT INTO users.employees (
+                    auth_user_id,
+                    employee_code,
+                    first_name,
+                    last_name,
+                    email,
+                    designation,
+                    monthly_expense_limit,
+                    is_active,
+                    join_date,
+                    department_id,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_DATE, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """,
+                user.getId(),
+                generateEmployeeCode(user.getId()),
+                user.getUsername(),
+                "User",
+                user.getEmail(),
+                designation,
+                50000,
+                true,
+                departmentId
+        );
+    }
+
+    private Long resolveDepartmentId(String requestedDepartment) {
+        if (requestedDepartment == null || requestedDepartment.isBlank()) {
+            return null;
+        }
+
+        String normalizedName = requestedDepartment.trim();
+        List<Long> ids = jdbcTemplate.query(
+                "SELECT id FROM users.departments WHERE LOWER(name) = LOWER(?) LIMIT 1",
+                (rs, rowNum) -> rs.getLong("id"),
+                normalizedName
+        );
+
+        if (!ids.isEmpty()) {
+            return ids.get(0);
+        }
+
+        String code = Optional.ofNullable(DEFAULT_DEPARTMENT_CODES.get(normalizedName.toUpperCase(Locale.ROOT)))
+                .orElseGet(() -> generateDepartmentCode(normalizedName));
+
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO users.departments (name, code, budget, created_at, updated_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT (code) DO UPDATE
+                SET name = EXCLUDED.name,
+                    updated_at = CURRENT_TIMESTAMP
+                RETURNING id
+                """,
+                Long.class,
+                normalizedName,
+                code,
+                0
+        );
+    }
+
+    private String generateDepartmentCode(String departmentName) {
+        String[] parts = departmentName.trim().toUpperCase(Locale.ROOT).split("\\s+");
+        StringBuilder builder = new StringBuilder();
+        for (String part : parts) {
+            if (!part.isBlank()) {
+                builder.append(part.charAt(0));
+            }
+        }
+
+        String code = builder.length() > 0 ? builder.toString() : departmentName.replaceAll("[^A-Za-z]", "")
+                .toUpperCase(Locale.ROOT);
+        return code.length() > 6 ? code.substring(0, 6) : code;
+    }
+
+    private String generateEmployeeCode(Long authUserId) {
+        return String.format("EMP-%05d", authUserId);
     }
 }

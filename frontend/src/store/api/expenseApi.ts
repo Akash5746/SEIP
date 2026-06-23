@@ -41,6 +41,11 @@ export const expenseApi = baseApi.injectEndpoints({
       providesTags: (_result, _error, id) => [{ type: 'Expense', id }],
     }),
 
+    getManagerExpenseById: builder.query<ApiResponse<Expense>, number>({
+      query: (id) => `/expenses/manager/item/${id}`,
+      providesTags: (_result, _error, id) => [{ type: 'Expense', id }],
+    }),
+
     createExpense: builder.mutation<ApiResponse<Expense>, CreateExpenseRequest>({
       query: (body) => ({
         url: '/expenses',
@@ -85,11 +90,28 @@ export const expenseApi = baseApi.injectEndpoints({
       invalidatesTags: ['Expense'],
     }),
 
+    requestExpenseChanges: builder.mutation<ApiResponse<Expense>, ApprovalAction>({
+      query: ({ expenseId, notes }) => ({
+        url: `/expenses/${expenseId}/request-changes`,
+        method: 'POST',
+        body: { notes },
+      }),
+      invalidatesTags: ['Expense'],
+    }),
+
     uploadReceipt: builder.mutation<ApiResponse<{ receiptId: number; fileUrl: string }>, { expenseId: number; file: FormData }>({
       query: ({ expenseId, file }) => ({
         url: `/expenses/${expenseId}/receipts`,
         method: 'POST',
         body: file,
+      }),
+      invalidatesTags: (_result, _error, { expenseId }) => [{ type: 'Expense', id: expenseId }],
+    }),
+
+    deleteReceipt: builder.mutation<ApiResponse<null>, { expenseId: number; receiptId: number }>({
+      query: ({ expenseId, receiptId }) => ({
+        url: `/expenses/${expenseId}/receipts/${receiptId}`,
+        method: 'DELETE',
       }),
       invalidatesTags: (_result, _error, { expenseId }) => [{ type: 'Expense', id: expenseId }],
     }),
@@ -119,6 +141,17 @@ export const expenseApi = baseApi.injectEndpoints({
       providesTags: ['Expense'],
     }),
 
+    getManagerEmployeeExpenses: builder.query<
+      ApiResponse<PageResponse<Expense>>,
+      { employeeAuthUserId: number; page?: number; size?: number }
+    >({
+      query: ({ employeeAuthUserId, page = 0, size = 20 }) => ({
+        url: `/expenses/manager/employee/${employeeAuthUserId}`,
+        params: { page, size },
+      }),
+      providesTags: ['Expense'],
+    }),
+
     getMyExpenses: builder.query<ApiResponse<PageResponse<Expense>>, ExpenseFilters>({
       query: (params) => ({
         url: '/expenses/my',
@@ -136,14 +169,18 @@ export const expenseApi = baseApi.injectEndpoints({
 export const {
   useGetExpensesQuery,
   useGetExpenseByIdQuery,
+  useGetManagerExpenseByIdQuery,
   useCreateExpenseMutation,
   useUpdateExpenseMutation,
   useSubmitExpenseMutation,
   useApproveExpenseMutation,
   useRejectExpenseMutation,
+  useRequestExpenseChangesMutation,
   useUploadReceiptMutation,
+  useDeleteReceiptMutation,
   useDeleteExpenseMutation,
   useGetCategoriesQuery,
   useGetPendingApprovalsQuery,
+  useGetManagerEmployeeExpensesQuery,
   useGetMyExpensesQuery,
 } = expenseApi;

@@ -16,10 +16,12 @@ import ExpenseListPage from './pages/expenses/ExpenseListPage';
 import CreateExpensePage from './pages/expenses/CreateExpensePage';
 import ExpenseDetailPage from './pages/expenses/ExpenseDetailPage';
 import ApprovalQueuePage from './pages/manager/ApprovalQueuePage';
+import ManagerEmployeeDetailPage from './pages/manager/ManagerEmployeeDetailPage';
 import FraudDashboardPage from './pages/FraudDashboardPage';
 import ReportsPage from './pages/ReportsPage';
 import AdminPage from './pages/AdminPage';
 import AuditLogsPage from './pages/AuditLogsPage';
+import { hasRole } from './utils/roles';
 
 // ─── Protected Route ──────────────────────────────────────────────────────────
 interface ProtectedRouteProps {
@@ -34,7 +36,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     return <Navigate to="/login" replace />;
   }
 
-  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
+  if (allowedRoles && user && !allowedRoles.some((allowedRole) => hasRole(user.role, allowedRole))) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -69,30 +71,39 @@ const App: React.FC = () => {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="expenses" element={<ExpenseListPage />} />
         <Route path="expenses/new" element={<CreateExpensePage />} />
+        <Route path="expenses/:id/edit" element={<CreateExpensePage />} />
         <Route path="expenses/:id" element={<ExpenseDetailPage />} />
 
         {/* Manager + Admin only */}
         <Route
           path="manager/queue"
           element={
-            <ProtectedRoute allowedRoles={['MANAGER', 'ADMIN']}>
+            <ProtectedRoute allowedRoles={['ROLE_MANAGER', 'ROLE_ADMIN']}>
               <ApprovalQueuePage />
             </ProtectedRoute>
           }
         />
         <Route
-          path="fraud"
+          path="manager/employees/:authUserId"
           element={
-            <ProtectedRoute allowedRoles={['MANAGER', 'ADMIN']}>
-              <FraudDashboardPage />
+            <ProtectedRoute allowedRoles={['ROLE_MANAGER', 'ROLE_ADMIN']}>
+              <ManagerEmployeeDetailPage />
             </ProtectedRoute>
           }
         />
         <Route
           path="reports"
           element={
-            <ProtectedRoute allowedRoles={['MANAGER', 'ADMIN']}>
+            <ProtectedRoute>
               <ReportsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="fraud"
+          element={
+            <ProtectedRoute allowedRoles={['ROLE_ADMIN']}>
+              <FraudDashboardPage />
             </ProtectedRoute>
           }
         />
@@ -101,7 +112,7 @@ const App: React.FC = () => {
         <Route
           path="admin"
           element={
-            <ProtectedRoute allowedRoles={['ADMIN']}>
+            <ProtectedRoute allowedRoles={['ROLE_ADMIN']}>
               <AdminPage />
             </ProtectedRoute>
           }
@@ -109,7 +120,7 @@ const App: React.FC = () => {
         <Route
           path="audit"
           element={
-            <ProtectedRoute allowedRoles={['ADMIN']}>
+            <ProtectedRoute allowedRoles={['ROLE_ADMIN']}>
               <AuditLogsPage />
             </ProtectedRoute>
           }

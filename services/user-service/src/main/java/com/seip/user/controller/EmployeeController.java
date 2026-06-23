@@ -30,8 +30,8 @@ public class EmployeeController {
     private final EmployeeService employeeService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
-    @Operation(summary = "Get all employees (paginated) - MANAGER or ADMIN")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Get all employees (paginated) - ADMIN only")
     public ResponseEntity<ApiResponse<PageResponse<EmployeeDto>>> getAllEmployees(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -41,7 +41,8 @@ public class EmployeeController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Get employee by ID")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Get employee by ID - ADMIN only")
     public ResponseEntity<ApiResponse<EmployeeDto>> getEmployeeById(@PathVariable Long id) {
         EmployeeDto employee = employeeService.getEmployeeById(id);
         return ResponseEntity.ok(ApiResponse.success("Employee retrieved successfully", employee));
@@ -53,6 +54,31 @@ public class EmployeeController {
             @RequestHeader("X-Auth-User-Id") Long authUserId) {
         EmployeeDto employee = employeeService.getEmployeeByAuthUserId(authUserId);
         return ResponseEntity.ok(ApiResponse.success("Profile retrieved successfully", employee));
+    }
+
+    @GetMapping("/auth/{authUserId}")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @Operation(summary = "Get an employee by auth user ID with authorization checks")
+    public ResponseEntity<ApiResponse<EmployeeDto>> getEmployeeByAuthUserId(
+            @PathVariable Long authUserId,
+            @RequestHeader("X-Auth-User-Id") Long requesterAuthUserId,
+            @RequestHeader("X-Auth-User-Role") String requesterRole) {
+        EmployeeDto employee = employeeService.getAuthorizedEmployeeByAuthUserId(
+                requesterAuthUserId,
+                requesterRole,
+                authUserId
+        );
+        return ResponseEntity.ok(ApiResponse.success("Employee retrieved successfully", employee));
+    }
+
+    @GetMapping("/my-department")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @Operation(summary = "Get employees visible to the current manager/admin")
+    public ResponseEntity<ApiResponse<List<EmployeeDto>>> getMyDepartmentEmployees(
+            @RequestHeader("X-Auth-User-Id") Long requesterAuthUserId,
+            @RequestHeader("X-Auth-User-Role") String requesterRole) {
+        List<EmployeeDto> employees = employeeService.getDepartmentEmployeesForCurrentUser(requesterAuthUserId, requesterRole);
+        return ResponseEntity.ok(ApiResponse.success("Department employees retrieved successfully", employees));
     }
 
     @PostMapping
@@ -67,7 +93,8 @@ public class EmployeeController {
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Update an employee")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Update an employee - ADMIN only")
     public ResponseEntity<ApiResponse<EmployeeDto>> updateEmployee(
             @PathVariable Long id,
             @RequestBody EmployeeUpdateRequest request) {
@@ -84,6 +111,7 @@ public class EmployeeController {
     }
 
     @GetMapping("/department/{departmentId}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get all employees in a department")
     public ResponseEntity<ApiResponse<List<EmployeeDto>>> getEmployeesByDepartment(
             @PathVariable Long departmentId) {

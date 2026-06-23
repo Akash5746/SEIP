@@ -12,7 +12,7 @@ RUN addgroup -S seip && adduser -S seip -G seip
 # Create logs directory
 RUN mkdir -p logs && chown -R seip:seip /app
 
-ARG JAR_FILE=target/*.jar
+ARG JAR_FILE=target/expense-service-1.0.0-SNAPSHOT.jar
 COPY ${JAR_FILE} app.jar
 
 # Switch to non-root user

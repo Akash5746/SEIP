@@ -70,7 +70,7 @@ class FraudAnalysisServiceTest {
                 .thenReturn(Mono.just(3));
 
         // Arrange — ML service
-        when(mlServiceClient.predictFraud(any(BigDecimal.class), anyString(), anyInt()))
+        when(mlServiceClient.predictFraud(any(FraudCheckRequestEvent.class), anyInt()))
                 .thenReturn(Mono.just(0.5));   // below 0.7 threshold → no ML flag
 
         // Arrange — rule engine returns HIGH_AMOUNT flag
@@ -123,7 +123,7 @@ class FraudAnalysisServiceTest {
         verify(fraudAnalysisRepository).existsByExpenseId(2001L);
         verify(expenseServiceClient).checkDuplicate(99L, new BigDecimal("75000"), "ACME Corp");
         verify(expenseServiceClient).getMonthlyClaimCount(99L);
-        verify(mlServiceClient).predictFraud(new BigDecimal("75000"), "TRAVEL", 3);
+        verify(mlServiceClient).predictFraud(sampleEvent, 3);
         verify(fraudRuleEngine).runAnalysis(any(FraudCheckContext.class));
 
         // Assert — saved with correct context passed to rule engine
@@ -146,7 +146,7 @@ class FraudAnalysisServiceTest {
                 .thenReturn(Mono.just(false));
         when(expenseServiceClient.getMonthlyClaimCount(anyLong()))
                 .thenReturn(Mono.just(2));
-        when(mlServiceClient.predictFraud(any(), anyString(), anyInt()))
+        when(mlServiceClient.predictFraud(any(FraudCheckRequestEvent.class), anyInt()))
                 .thenReturn(Mono.just(0.85));  // above threshold → ML_DETECTED flag
 
         // Rule engine returns score 10 (only WEEKEND rule fired)

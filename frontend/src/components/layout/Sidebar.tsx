@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { RootState } from '../../store';
 import { logout } from '../../store/slices/authSlice';
+import { formatRoleLabel, hasRole } from '../../utils/roles';
 
 interface NavItem {
   label: string;
@@ -30,11 +31,11 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'My Expenses', path: '/expenses', icon: Receipt },
   { label: 'Create Expense', path: '/expenses/new', icon: PlusCircle },
-  { label: 'Approval Queue', path: '/manager/queue', icon: CheckCircle, roles: ['MANAGER', 'ADMIN'] },
-  { label: 'Fraud Dashboard', path: '/fraud', icon: Shield, roles: ['MANAGER', 'ADMIN'] },
-  { label: 'Reports', path: '/reports', icon: BarChart2, roles: ['MANAGER', 'ADMIN'] },
-  { label: 'Audit Logs', path: '/audit', icon: FileText, roles: ['ADMIN'] },
-  { label: 'Admin Panel', path: '/admin', icon: Settings, roles: ['ADMIN'] },
+  { label: 'Approval Queue', path: '/manager/queue', icon: CheckCircle, roles: ['ROLE_MANAGER', 'ROLE_ADMIN'] },
+  { label: 'Fraud Dashboard', path: '/fraud', icon: Shield, roles: ['ROLE_ADMIN'] },
+  { label: 'Reports', path: '/reports', icon: BarChart2 },
+  { label: 'Audit Logs', path: '/audit', icon: FileText, roles: ['ROLE_ADMIN'] },
+  { label: 'Admin Panel', path: '/admin', icon: Settings, roles: ['ROLE_ADMIN'] },
 ];
 
 const Sidebar: React.FC = () => {
@@ -50,7 +51,7 @@ const Sidebar: React.FC = () => {
   };
 
   const visibleItems = navItems.filter(
-    (item) => !item.roles || (user && item.roles.includes(user.role))
+    (item) => !item.roles || (user && item.roles.some((role) => hasRole(user.role, role)))
   );
 
   const userInitials = user?.username
@@ -143,7 +144,7 @@ const Sidebar: React.FC = () => {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-white truncate">{user?.username || 'User'}</p>
-              <p className="text-xs text-slate-500 truncate">{user?.role || 'Employee'}</p>
+              <p className="text-xs text-slate-500 truncate">{formatRoleLabel(user?.role)}</p>
             </div>
             <button
               onClick={handleLogout}

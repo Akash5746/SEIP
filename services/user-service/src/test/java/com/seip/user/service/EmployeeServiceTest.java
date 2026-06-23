@@ -17,8 +17,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,6 +42,9 @@ class EmployeeServiceTest {
 
     @Mock
     private EmployeeMapper employeeMapper;
+
+    @Mock
+    private JdbcTemplate jdbcTemplate;
 
     @InjectMocks
     private EmployeeService employeeService;
@@ -208,5 +213,60 @@ class EmployeeServiceTest {
         assertThat(employee.isActive()).isFalse();
         verify(employeeRepository).findById(1L);
         verify(employeeRepository).save(employee);
+    }
+
+    @Test
+    @DisplayName("getDepartmentEmployeesForCurrentUser returns only active department employees for managers")
+    void testGetDepartmentEmployeesForCurrentUser_filtersOutManagersAndRequester() {
+        Employee managerRequester = Employee.builder()
+                .id(10L)
+                .authUserId(100L)
+                .email("manager@seip.com")
+                .firstName("Manager")
+                .lastName("User")
+                .department(department)
+                .active(true)
+                .build();
+
+        Employee sameDepartmentManager = Employee.builder()
+                .id(11L)
+                .authUserId(101L)
+                .email("peer.manager@seip.com")
+                .firstName("Peer")
+                .lastName("Manager")
+                .department(department)
+                .active(true)
+                .build();
+
+        Employee departmentEmployee = Employee.builder()
+                .id(12L)
+                .authUserId(102L)
+                .email("employee@seip.com")
+                .firstName("Dept")
+                .lastName("Employee")
+                .department(department)
+                .active(true)
+                .build();
+
+        when(employeeRepository.findByAuthUserId(100L)).thenReturn(Optional.of(managerRequester));
+        when(employeeRepository.findByDepartmentIdAndActiveTrue(1L))
+                .thenReturn(List.of(managerRequester, sameDepartmentManager, departmentEmployee));
+        when(jdbcTemplate.queryForList(anyString(), eq(Long.class), eq(1L))).thenReturn(List.of(102L));
+        when(employeeMapper.toDto(any(Employee.class))).thenAnswer(invocation -> {
+            Employee source = invocation.getArgument(0);
+            return EmployeeDto.builder()
+                    .id(source.getId())
+                    .authUserId(source.getAuthUserId())
+                    .email(source.getEmail())
+                    .active(source.isActive())
+                    .departmentId(department.getId())
+                    .departmentName(department.getName())
+                    .build();
+        });
+
+        List<EmployeeDto> result = employeeService.getDepartmentEmployeesForCurrentUser(100L, "ROLE_MANAGER");
+
+        assertThat(result).extracting(EmployeeDto::getAuthUserId).containsExactly(102L);
+        verify(employeeRepository).findByDepartmentIdAndActiveTrue(1L);
     }
 }

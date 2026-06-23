@@ -10,6 +10,7 @@ import com.seip.fraud.entity.FlagType;
 import com.seip.fraud.entity.FraudAnalysis;
 import com.seip.fraud.entity.FraudFlag;
 import com.seip.fraud.entity.RiskLevel;
+import com.seip.fraud.exception.AccessDeniedException;
 import com.seip.fraud.exception.ResourceNotFoundException;
 import com.seip.fraud.repository.FraudAnalysisRepository;
 import com.seip.fraud.rules.FraudAnalysisResult;
@@ -21,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -41,6 +44,7 @@ public class FraudAnalysisService {
     private final FraudAnalysisRepository fraudAnalysisRepository;
     private final ExpenseServiceClient  expenseServiceClient;
     private final MlServiceClient       mlServiceClient;
+    private final JdbcTemplate jdbcTemplate;
 
     // -----------------------------------------------------------------------
     // Analyze
@@ -92,7 +96,7 @@ public class FraudAnalysisService {
 
         // 4. Call ML service
         Double mlProbability = mlServiceClient
-                .predictFraud(event.getAmount(), event.getCategoryCode(), context.getMonthlyClaimCount())
+                .predictFraud(event, context.getMonthlyClaimCount())
                 .block();
 
         // Consolidate rule results
@@ -161,6 +165,33 @@ public class FraudAnalysisService {
         return fraudAnalysisRepository.findByExpenseId(expenseId)
                 .map(this::toDto)
                 .orElse(null);
+    }
+
+    @Transactional(readOnly = true)
+    public FraudAnalysisDto getAuthorizedAnalysisByExpenseId(Long requesterAuthUserId, String requesterRole, Long expenseId) {
+        FraudAnalysis analysis = fraudAnalysisRepository.findByExpenseId(expenseId)
+                .orElseThrow(() -> new ResourceNotFoundException("FraudAnalysis", "expenseId", expenseId));
+
+        if (requesterAuthUserId == null) {
+            throw new AccessDeniedException("Authentication is required to access fraud analysis");
+        }
+
+        if (analysis.getEmployeeId().equals(requesterAuthUserId) || isAdmin(requesterRole)) {
+            return toDto(analysis);
+        }
+
+        if (!isManager(requesterRole)) {
+            throw new AccessDeniedException("You do not have permission to access this fraud analysis");
+        }
+
+        Long requesterDepartmentId = getDepartmentIdForAuthUser(requesterAuthUserId);
+        Long employeeDepartmentId = getDepartmentIdForAuthUser(analysis.getEmployeeId());
+        if (requesterDepartmentId == null || employeeDepartmentId == null
+                || !requesterDepartmentId.equals(employeeDepartmentId)) {
+            throw new AccessDeniedException("You can only access fraud analysis for employees in your department");
+        }
+
+        return toDto(analysis);
     }
 
     @Transactional(readOnly = true)
@@ -237,5 +268,37 @@ public class FraudAnalysisService {
                 .analystNotes(a.getAnalystNotes())
                 .flags(flagDtos)
                 .build();
+    }
+
+    private Long getDepartmentIdForAuthUser(Long authUserId) {
+        List<Long> results = jdbcTemplate.query("""
+                SELECT department_id
+                FROM users.employees
+                WHERE auth_user_id = ?
+                LIMIT 1
+                """, (rs, rowNum) -> {
+            long value = rs.getLong("department_id");
+            return rs.wasNull() ? null : value;
+        }, authUserId);
+
+        return results.isEmpty() ? null : results.get(0);
+    }
+
+    private boolean isManager(String role) {
+        return "ROLE_MANAGER".equals(normalizeRole(role));
+    }
+
+    private boolean isAdmin(String role) {
+        String normalized = normalizeRole(role);
+        return "ROLE_ADMIN".equals(normalized) || "ROLE_ANALYST".equals(normalized);
+    }
+
+    private String normalizeRole(String role) {
+        if (role == null || role.isBlank()) {
+            return "";
+        }
+
+        String normalized = role.trim().toUpperCase(Locale.ROOT);
+        return normalized.startsWith("ROLE_") ? normalized : "ROLE_" + normalized;
     }
 }

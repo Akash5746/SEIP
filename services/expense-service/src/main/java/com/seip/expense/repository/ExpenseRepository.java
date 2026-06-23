@@ -22,6 +22,10 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
 
     Page<Expense> findByEmployeeId(Long employeeId, Pageable pageable);
 
+    Page<Expense> findByEmployeeIdIn(List<Long> employeeIds, Pageable pageable);
+
+    Page<Expense> findByEmployeeIdInAndStatusIn(List<Long> employeeIds, List<ExpenseStatus> statuses, Pageable pageable);
+
     Page<Expense> findByStatusIn(List<ExpenseStatus> statuses, Pageable pageable);
 
     @Query("SELECT MAX(e.id) FROM Expense e")

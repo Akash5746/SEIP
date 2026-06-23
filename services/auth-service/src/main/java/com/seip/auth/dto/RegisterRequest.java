@@ -28,4 +28,6 @@ public class RegisterRequest {
 
     @Builder.Default
     private String role = "ROLE_EMPLOYEE";
+
+    private String department;
 }

@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,6 +25,7 @@ public class ManagerController {
     private final ManagerMappingService managerMappingService;
 
     @PostMapping("/assign")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Assign a manager to an employee")
     public ResponseEntity<ApiResponse<Void>> assignManager(
             @Valid @RequestBody ManagerAssignRequest request) {
@@ -32,6 +34,7 @@ public class ManagerController {
     }
 
     @GetMapping("/{managerId}/reports")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get direct reports for a manager")
     public ResponseEntity<ApiResponse<List<EmployeeDto>>> getDirectReports(
             @PathVariable Long managerId) {
@@ -40,6 +43,7 @@ public class ManagerController {
     }
 
     @GetMapping("/employee/{employeeId}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get primary manager for an employee")
     public ResponseEntity<ApiResponse<EmployeeDto>> getManagerForEmployee(
             @PathVariable Long employeeId) {
@@ -48,6 +52,7 @@ public class ManagerController {
     }
 
     @DeleteMapping("/employee/{employeeId}/manager/{managerId}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Remove manager assignment from an employee")
     public ResponseEntity<ApiResponse<Void>> removeManagerAssignment(
             @PathVariable Long employeeId,

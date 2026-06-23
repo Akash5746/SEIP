@@ -18,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -47,6 +48,9 @@ class ReceiptServiceTest {
 
     @Mock
     private ExpenseMapper expenseMapper;
+
+    @Mock
+    private JdbcTemplate jdbcTemplate;
 
     @InjectMocks
     private ReceiptService receiptService;
@@ -128,6 +132,7 @@ class ReceiptServiceTest {
         // Assert
         assertThat(result).isNotNull();
         assertThat(result.getFileName()).isEqualTo("receipt.jpg");
+        assertThat(result.getFileUrl()).isEqualTo("/expenses/1/receipts/1/content");
         verify(minioStorageService).uploadFile(
                 eq("expense-receipts"),
                 anyString(),
@@ -186,6 +191,29 @@ class ReceiptServiceTest {
     }
 
     @Test
+    @DisplayName("testUploadReceipt_validWebp_success")
+    void testUploadReceipt_validWebp_success() {
+        MockMultipartFile webpFile = new MockMultipartFile(
+                "file",
+                "receipt.webp",
+                "image/webp",
+                new byte[1024]
+        );
+
+        when(expenseRepository.findById(1L)).thenReturn(Optional.of(testExpense));
+        when(minioStorageService.uploadFile(
+                anyString(), anyString(), any(InputStream.class), anyLong(), anyString()))
+                .thenReturn("http://localhost:9000/expense-receipts/expenses/1/uuid_receipt.webp");
+        when(receiptRepository.save(any(Receipt.class))).thenReturn(testReceipt);
+        when(expenseMapper.toReceiptDto(any())).thenReturn(testReceiptDto);
+
+        ReceiptDto result = receiptService.uploadReceipt(1L, 100L, webpFile);
+
+        assertThat(result).isNotNull();
+        verify(minioStorageService).uploadFile(anyString(), anyString(), any(), anyLong(), eq("image/webp"));
+    }
+
+    @Test
     @DisplayName("testUploadReceipt_exceedsSizeLimit_throwsException")
     void testUploadReceipt_exceedsSizeLimit_throwsException() {
         // Arrange - file larger than 10MB
@@ -236,5 +264,13 @@ class ReceiptServiceTest {
                 .isInstanceOf(FileStorageException.class);
 
         verify(receiptRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("withAccessUrl generates protected receipt content path")
+    void testWithAccessUrl_generatesProtectedContentPath() {
+        ReceiptDto result = receiptService.withAccessUrl(testReceiptDto);
+
+        assertThat(result.getFileUrl()).isEqualTo("/expenses/1/receipts/1/content");
     }
 }

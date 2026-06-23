@@ -15,7 +15,7 @@ public class ExpenseEventPublisher {
     private static final String TOPIC_EXPENSE_SUBMITTED = "expense.submitted";
     private static final String TOPIC_EXPENSE_APPROVED = "expense.approved";
     private static final String TOPIC_EXPENSE_REJECTED = "expense.rejected";
-    private static final String TOPIC_FRAUD_CHECK_REQUEST = "fraud.check.request";
+    private static final String TOPIC_FRAUD_CHECK_REQUEST = "expense.fraud.check.request";
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
 

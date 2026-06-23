@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
+import { useSelector } from 'react-redux';
 import {
   ArrowLeft,
   Calendar,
@@ -15,6 +16,7 @@ import {
   ExternalLink,
   Hash,
   Send,
+  Pencil,
 } from 'lucide-react';
 import { useGetExpenseByIdQuery, useSubmitExpenseMutation } from '../../store/api/expenseApi';
 import { useGetFraudAnalysisQuery } from '../../store/api/fraudApi';
@@ -22,26 +24,63 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import RiskBadge from '../../components/ui/RiskBadge';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import { ExpenseStatus, RiskLevel } from '../../types';
+import { RootState } from '../../store';
+import { openReceiptInNewTab } from '../../utils/receipts';
 
 const ExpenseDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const accessToken = useSelector((state: RootState) => state.auth.accessToken);
   const expenseId = parseInt(id ?? '0', 10);
   const [activeTab, setActiveTab] = useState<'details' | 'fraud' | 'receipts'>('details');
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const { data: expenseData, isLoading: expenseLoading } = useGetExpenseByIdQuery(expenseId, { skip: !expenseId });
+  const {
+    data: expenseData,
+    isLoading: expenseLoading,
+    isError: expenseLoadFailed,
+    error: expenseLoadError,
+  } = useGetExpenseByIdQuery(expenseId, { skip: !expenseId });
   const { data: fraudData, isLoading: fraudLoading } = useGetFraudAnalysisQuery(expenseId, { skip: !expenseId });
   const [submitExpense, { isLoading: isSubmitting }] = useSubmitExpenseMutation();
 
   const expense = expenseData?.data;
   const fraud = fraudData?.data;
+  const expenseErrorMessage = (() => {
+    if (!expenseLoadError || typeof expenseLoadError !== 'object') {
+      return 'Unable to load this expense right now.';
+    }
+
+    if ('status' in expenseLoadError && expenseLoadError.status === 404) {
+      return 'Expense not found.';
+    }
+
+    if ('data' in expenseLoadError && expenseLoadError.data && typeof expenseLoadError.data === 'object') {
+      const message = (expenseLoadError.data as { message?: string }).message;
+      if (message) {
+        return message;
+      }
+    }
+
+    return 'Unable to load this expense right now.';
+  })();
 
   if (expenseLoading) {
     return (
       <div className="space-y-4">
         <div className="skeleton h-8 w-48" />
         <LoadingSkeleton variant="card" />
+      </div>
+    );
+  }
+
+  if (expenseLoadFailed) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-slate-500 text-lg">{expenseErrorMessage}</p>
+        <button onClick={() => navigate('/expenses')} className="btn-primary mt-4 text-sm">
+          <ArrowLeft size={15} /> Back to Expenses
+        </button>
       </div>
     );
   }
@@ -71,6 +110,14 @@ const ExpenseDetailPage: React.FC = () => {
       await submitExpense(expenseId).unwrap();
     } catch {
       setSubmitError('Failed to submit expense. Please try again.');
+    }
+  };
+
+  const handleOpenReceipt = async (receiptUrl: string) => {
+    try {
+      await openReceiptInNewTab(receiptUrl, accessToken);
+    } catch {
+      setSubmitError('Failed to open receipt. Please try again.');
     }
   };
 
@@ -107,23 +154,32 @@ const ExpenseDetailPage: React.FC = () => {
             {expense.currency} {expense.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </p>
           {expense.status === 'DRAFT' && (
-            <button
-              onClick={handleSubmitForApproval}
-              disabled={isSubmitting}
-              className="btn-primary text-sm ml-auto"
-            >
-              {isSubmitting ? (
-                <span className="flex items-center gap-2">
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Submitting...
-                </span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  <Send size={15} />
-                  Submit for Approval
-                </span>
-              )}
-            </button>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => navigate(`/expenses/${expenseId}/edit`)}
+                className="btn-secondary text-sm"
+              >
+                <Pencil size={15} />
+                Edit Expense
+              </button>
+              <button
+                onClick={handleSubmitForApproval}
+                disabled={isSubmitting}
+                className="btn-primary text-sm"
+              >
+                {isSubmitting ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Submitting...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Send size={15} />
+                    Submit for Approval
+                  </span>
+                )}
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -186,7 +242,9 @@ const ExpenseDetailPage: React.FC = () => {
               )}
               {expense.reviewNotes && (
                 <div className="mt-4 pt-4 border-t border-slate-700">
-                  <p className="text-xs text-slate-500 mb-1.5">Review Notes</p>
+                  <p className="text-xs text-slate-500 mb-1.5">
+                    {expense.status === 'REJECTED' ? 'Rejection Remarks' : 'Manager Remarks'}
+                  </p>
                   <p className="text-sm text-slate-300 bg-slate-800/50 rounded-lg p-3">{expense.reviewNotes}</p>
                 </div>
               )}
@@ -228,7 +286,7 @@ const ExpenseDetailPage: React.FC = () => {
                   { label: 'Created', date: expense.createdAt, done: true },
                   { label: 'Submitted', date: expense.submittedAt, done: !!expense.submittedAt },
                   { label: 'Under Review', date: null, done: ['UNDER_REVIEW', 'APPROVED', 'REJECTED', 'REIMBURSED'].includes(expense.status) },
-                  { label: expense.status === 'REJECTED' ? 'Rejected' : 'Approved', date: expense.updatedAt, done: ['APPROVED', 'REJECTED', 'REIMBURSED'].includes(expense.status) },
+                  { label: expense.status === 'REJECTED' ? 'Rejected' : 'Approved', date: expense.reviewedAt, done: ['APPROVED', 'REJECTED', 'REIMBURSED'].includes(expense.status) },
                   { label: 'Reimbursed', date: null, done: expense.status === 'REIMBURSED' },
                 ].map(({ label, date, done }, i) => (
                   <div key={i} className="flex items-start gap-3">
@@ -378,14 +436,13 @@ const ExpenseDetailPage: React.FC = () => {
                       {receipt.contentType} · {format(new Date(receipt.uploadTime), 'MMM d')}
                     </p>
                   </div>
-                  <a
-                    href={receipt.fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => handleOpenReceipt(receipt.fileUrl)}
                     className="p-2 text-slate-500 hover:text-indigo-400 transition-colors"
                   >
                     <ExternalLink size={15} />
-                  </a>
+                  </button>
                 </div>
               ))}
             </div>

@@ -4,7 +4,7 @@ WORKDIR /app
 # Create a non-root user for security
 RUN addgroup -S seip && adduser -S seip -G seip
 
-ARG JAR_FILE=target/*.jar
+ARG JAR_FILE=target/fraud-service-1.0.0-SNAPSHOT.jar
 COPY ${JAR_FILE} app.jar
 
 # Ensure the log directory exists and is writable

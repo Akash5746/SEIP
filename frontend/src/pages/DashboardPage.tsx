@@ -2,28 +2,52 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
-  Receipt,
+  AlertTriangle,
+  ArrowRight,
+  BarChart2,
+  CalendarDays,
+  CheckCircle,
+  ChevronDown,
   Clock,
   DollarSign,
-  AlertTriangle,
   PlusCircle,
-  BarChart2,
-  ArrowRight,
+  Receipt,
   TrendingUp,
-  CalendarDays,
+  UserCircle2,
+  Users,
+  XCircle,
 } from 'lucide-react';
 import { endOfWeek, format, getISOWeek, startOfWeek } from 'date-fns';
 import { RootState } from '../store';
-import { useGetDashboardStatsQuery, useGetMonthlySpendQuery, useGetRecentExpensesQuery } from '../store/api/analyticsApi';
-import { useGetMyExpensesQuery } from '../store/api/expenseApi';
+import {
+  useGetCategorySpendQuery,
+  useGetDashboardStatsQuery,
+  useGetManagerDashboardQuery,
+  useGetMonthlySpendQuery,
+  useGetRecentExpensesQuery,
+} from '../store/api/analyticsApi';
+import {
+  useApproveExpenseMutation,
+  useGetMyExpensesQuery,
+  useGetPendingApprovalsQuery,
+  useRejectExpenseMutation,
+  useRequestExpenseChangesMutation,
+} from '../store/api/expenseApi';
+import { useGetMyDepartmentEmployeesQuery } from '../store/api/userApi';
 import StatsCard from '../components/ui/StatsCard';
 import StatusBadge from '../components/ui/StatusBadge';
 import RiskBadge from '../components/ui/RiskBadge';
 import MonthlySpendChart from '../components/charts/MonthlySpendChart';
 import StatusDonutChart from '../components/charts/StatusDonutChart';
 import SpendCandlestickChart from '../components/charts/SpendCandlestickChart';
-import { StatsCardSkeleton } from '../components/ui/LoadingSkeleton';
+import CategoryPieChart from '../components/charts/CategoryPieChart';
+import LoadingSkeleton, { StatsCardSkeleton } from '../components/ui/LoadingSkeleton';
+import Modal from '../components/ui/Modal';
 import { Expense, ExpenseStatus, RiskLevel } from '../types';
+import { hasRole } from '../utils/roles';
+
+const formatAmount = (amount: number, currency = 'INR') =>
+  `${currency} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const calculatePercentChange = (current: number, previous: number) => {
   if (previous === 0) {
@@ -36,66 +60,120 @@ const calculatePercentChange = (current: number, previous: number) => {
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useSelector((state: RootState) => state.auth);
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1;
+  const isManager = hasRole(user?.role, 'ROLE_MANAGER');
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
 
-  const { data: statsData, isLoading: statsLoading } = useGetDashboardStatsQuery();
+  const [selectedWeekLabel, setSelectedWeekLabel] = useState<string | null>(null);
+  const [selectedDepartmentEmployeeId, setSelectedDepartmentEmployeeId] = useState('');
+  const [reviewAction, setReviewAction] = useState<'reject' | 'changes' | null>(null);
+  const [selectedExpenseId, setSelectedExpenseId] = useState<number | null>(null);
+  const [reviewNotes, setReviewNotes] = useState('');
+  const [actionLoading, setActionLoading] = useState<number | null>(null);
+
+  const { data: personalStatsData, isLoading: personalStatsLoading } = useGetDashboardStatsQuery();
   const { data: monthlyData, isLoading: monthlyLoading } = useGetMonthlySpendQuery({ year: currentYear });
+  const { data: categoryData, isLoading: categoryLoading } = useGetCategorySpendQuery({
+    startDate: format(new Date(currentYear, 0, 1), 'yyyy-MM-dd'),
+    endDate: format(new Date(), 'yyyy-MM-dd'),
+  });
   const { data: recentData, isLoading: recentLoading } = useGetRecentExpensesQuery({ limit: 6 });
   const { data: expensesData, isLoading: expensesLoading } = useGetMyExpensesQuery({ page: 0, size: 200 });
 
-  const stats = statsData?.data;
+  const { data: managerDashboardData, isLoading: managerStatsLoading } = useGetManagerDashboardQuery(undefined, {
+    skip: !isManager,
+  });
+  const { data: departmentEmployeesData, isLoading: departmentEmployeesLoading } = useGetMyDepartmentEmployeesQuery(
+    undefined,
+    { skip: !isManager }
+  );
+  const {
+    data: pendingApprovalsData,
+    isLoading: pendingApprovalsLoading,
+    refetch: refetchPendingApprovals,
+  } = useGetPendingApprovalsQuery({ page: 0, size: 20 }, { skip: !isManager });
+
+  const [approveExpense] = useApproveExpenseMutation();
+  const [rejectExpense] = useRejectExpenseMutation();
+  const [requestExpenseChanges] = useRequestExpenseChangesMutation();
+
+  const personalStats = personalStatsData?.data;
   const monthlySpend = monthlyData?.data ?? [];
+  const categorySpend = categoryData?.data ?? [];
   const recentExpenses = recentData?.data ?? [];
   const allExpenses = expensesData?.data?.content ?? [];
+  const managerDashboard = managerDashboardData?.data;
+  const departmentEmployees = departmentEmployeesData?.data ?? [];
+  const visibleDepartmentEmployees = departmentEmployees.filter(
+    (employee) => employee.active && employee.role === 'ROLE_EMPLOYEE'
+  );
+  const pendingApprovals = pendingApprovalsData?.data?.content ?? [];
+  const selectedDepartmentEmployee = visibleDepartmentEmployees.find(
+    (employee) => String(employee.authUserId ?? employee.id) === selectedDepartmentEmployeeId
+  );
+  const departmentEmployeePlaceholder = departmentEmployeesLoading
+    ? 'Loading employees...'
+    : visibleDepartmentEmployees.length === 0
+      ? 'No employees found in your department.'
+      : 'Select employee';
+
+  useEffect(() => {
+    if (!selectedDepartmentEmployeeId) {
+      return;
+    }
+
+    if (!selectedDepartmentEmployee) {
+      setSelectedDepartmentEmployeeId('');
+    }
+  }, [selectedDepartmentEmployee, selectedDepartmentEmployeeId]);
+
   const currentMonthStats = monthlySpend.find((entry) => entry.month === currentMonth);
   const previousMonthStats = currentMonth > 1
     ? monthlySpend.find((entry) => entry.month === currentMonth - 1)
     : undefined;
+
   const totalExpensesTrend = previousMonthStats
     ? {
-        value: calculatePercentChange(
-          currentMonthStats?.expenseCount ?? 0,
-          previousMonthStats.expenseCount
-        ),
+        value: calculatePercentChange(currentMonthStats?.expenseCount ?? 0, previousMonthStats.expenseCount),
         label: 'vs last month',
       }
     : undefined;
   const thisMonthTrend = previousMonthStats
     ? {
-        value: calculatePercentChange(
-          currentMonthStats?.totalAmount ?? 0,
-          previousMonthStats.totalAmount
-        ),
+        value: calculatePercentChange(currentMonthStats?.totalAmount ?? 0, previousMonthStats.totalAmount),
         label: 'vs last month',
       }
     : undefined;
+
   const statusDistribution = Object.entries(
     recentExpenses.reduce<Record<string, number>>((acc, expense) => {
       acc[expense.status] = (acc[expense.status] ?? 0) + 1;
       return acc;
     }, {})
   ).map(([label, value]) => ({ label: label.replace(/_/g, ' '), value }));
+
   const weeklyBuckets = useMemo(() => {
-    const grouped = allExpenses.reduce<Record<string, { label: string; start: Date; end: Date; expenses: Expense[] }>>((acc, expense) => {
-      const baseDate = new Date(expense.expenseDate || expense.createdAt);
-      const weekStart = startOfWeek(baseDate, { weekStartsOn: 1 });
-      const weekEnd = endOfWeek(baseDate, { weekStartsOn: 1 });
-      const key = `${format(weekStart, 'yyyy-MM-dd')}`;
+    const grouped = allExpenses.reduce<Record<string, { label: string; start: Date; end: Date; expenses: Expense[] }>>(
+      (acc, expense) => {
+        const baseDate = new Date(expense.expenseDate || expense.createdAt);
+        const weekStart = startOfWeek(baseDate, { weekStartsOn: 1 });
+        const weekEnd = endOfWeek(baseDate, { weekStartsOn: 1 });
+        const key = format(weekStart, 'yyyy-MM-dd');
 
-      if (!acc[key]) {
-        acc[key] = {
-          label: `W${getISOWeek(baseDate)} · ${format(weekStart, 'MMM d')}`,
-          start: weekStart,
-          end: weekEnd,
-          expenses: [],
-        };
-      }
+        if (!acc[key]) {
+          acc[key] = {
+            label: `W${getISOWeek(baseDate)} · ${format(weekStart, 'MMM d')}`,
+            start: weekStart,
+            end: weekEnd,
+            expenses: [],
+          };
+        }
 
-      acc[key].expenses.push(expense);
-      return acc;
-    }, {});
+        acc[key].expenses.push(expense);
+        return acc;
+      },
+      {}
+    );
 
     return Object.values(grouped)
       .sort((a, b) => a.start.getTime() - b.start.getTime())
@@ -121,7 +199,7 @@ const DashboardPage: React.FC = () => {
         };
       });
   }, [allExpenses]);
-  const [selectedWeekLabel, setSelectedWeekLabel] = useState<string | null>(null);
+
   const selectedWeek = weeklyBuckets.find((bucket) => bucket.label === selectedWeekLabel)
     ?? (weeklyBuckets.length > 0 ? weeklyBuckets[weeklyBuckets.length - 1] : undefined);
 
@@ -138,16 +216,349 @@ const DashboardPage: React.FC = () => {
     return 'Good evening';
   };
 
+  const openReviewModal = (mode: 'reject' | 'changes', expenseId: number) => {
+    setReviewAction(mode);
+    setSelectedExpenseId(expenseId);
+    setReviewNotes('');
+  };
+
+  const closeReviewModal = () => {
+    setReviewAction(null);
+    setSelectedExpenseId(null);
+    setReviewNotes('');
+  };
+
+  const handleApprove = async (expenseId: number) => {
+    setActionLoading(expenseId);
+    try {
+      await approveExpense({ expenseId }).unwrap();
+      await refetchPendingApprovals();
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleReviewSubmit = async () => {
+    if (!selectedExpenseId || !reviewAction || !reviewNotes.trim()) {
+      return;
+    }
+
+    setActionLoading(selectedExpenseId);
+    try {
+      if (reviewAction === 'reject') {
+        await rejectExpense({ expenseId: selectedExpenseId, notes: reviewNotes }).unwrap();
+      } else {
+        await requestExpenseChanges({ expenseId: selectedExpenseId, notes: reviewNotes }).unwrap();
+      }
+      closeReviewModal();
+      await refetchPendingApprovals();
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  if (isManager) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-white">
+              {getGreeting()}, <span className="gradient-text">{user?.username || 'Manager'}</span>
+            </h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Department metrics are isolated to your team. Select an employee to review their expenses and approvals.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button onClick={() => navigate('/manager/queue')} className="btn-secondary text-sm">
+              <CheckCircle size={16} />
+              Approval Queue
+            </button>
+            <button onClick={() => navigate('/reports')} className="btn-primary text-sm">
+              <BarChart2 size={16} />
+              Department Reports
+            </button>
+          </div>
+        </div>
+
+        {managerStatsLoading ? (
+          <StatsCardSkeleton />
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatsCard
+              title="Department Employees"
+              value={managerDashboard?.totalEmployees ?? 0}
+              subtitle={managerDashboard?.departmentName || 'Department scope'}
+              icon={Users}
+              colorClass="card-indigo"
+              gradient="from-indigo-500 to-violet-600"
+            />
+            <StatsCard
+              title="Pending Approvals"
+              value={managerDashboard?.pendingApprovals ?? 0}
+              subtitle="Awaiting your review"
+              icon={Clock}
+              colorClass="card-amber"
+              gradient="from-amber-500 to-orange-600"
+            />
+            <StatsCard
+              title="Department Spend"
+              value={formatAmount(Number(managerDashboard?.departmentExpensesThisMonth ?? 0))}
+              subtitle="This month"
+              icon={DollarSign}
+              colorClass="card-emerald"
+              gradient="from-emerald-500 to-teal-600"
+            />
+            <StatsCard
+              title="High Risk Alerts"
+              value={managerDashboard?.highRiskAlerts ?? 0}
+              subtitle="Within your department"
+              icon={AlertTriangle}
+              colorClass="card-rose"
+              gradient="from-rose-500 to-pink-600"
+            />
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="glass-card p-5">
+            <div className="mb-3 flex items-center gap-2 text-white">
+              <UserCircle2 size={18} className="text-indigo-400" />
+              <h3 className="font-semibold">Your Personal Expense Snapshot</h3>
+            </div>
+            {personalStatsLoading ? (
+              <LoadingSkeleton rows={3} />
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-700 bg-slate-900/40 p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Your expenses</p>
+                  <p className="mt-2 text-2xl font-bold text-white">{personalStats?.totalExpenses ?? 0}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-700 bg-slate-900/40 p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Your month spend</p>
+                  <p className="mt-2 text-2xl font-bold text-white">
+                    {formatAmount(Number(managerDashboard?.personalThisMonthAmount ?? 0))}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="glass-card p-5">
+            <div className="mb-3 flex items-center gap-2 text-white">
+              <Users size={18} className="text-indigo-400" />
+              <h3 className="font-semibold">Department Employees</h3>
+            </div>
+            <p className="mb-3 text-sm text-slate-500">
+              Only employees in {managerDashboard?.departmentName || 'your department'} are listed here.
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="relative flex-1">
+                <select
+                  value={selectedDepartmentEmployeeId}
+                  onChange={(event) => setSelectedDepartmentEmployeeId(event.target.value)}
+                  className="form-input w-full appearance-none pr-10"
+                  disabled={departmentEmployeesLoading || visibleDepartmentEmployees.length === 0}
+                >
+                  <option value="">{departmentEmployeePlaceholder}</option>
+                  {visibleDepartmentEmployees.map((employee) => (
+                    <option key={employee.authUserId ?? employee.id} value={employee.authUserId ?? employee.id}>
+                      {employee.username}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              </div>
+              <button
+                onClick={() => selectedDepartmentEmployee && navigate(`/manager/employees/${selectedDepartmentEmployeeId}`)}
+                disabled={!selectedDepartmentEmployee}
+                className="btn-primary text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ArrowRight size={16} />
+                Open Employee Detail
+              </button>
+            </div>
+            {!departmentEmployeesLoading && visibleDepartmentEmployees.length === 0 && (
+              <p className="mt-3 text-sm text-slate-500">No employees found in your department.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+          <div className="glass-card p-5 xl:col-span-2">
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-white">Department Monthly Spending</h3>
+                <p className="mt-0.5 text-xs text-slate-500">{currentYear} · scoped to your department</p>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-medium text-emerald-400">
+                <TrendingUp size={14} />
+                <span>Department trend</span>
+              </div>
+            </div>
+            {monthlyLoading ? (
+              <div className="skeleton h-56 w-full" />
+            ) : (
+              <MonthlySpendChart data={monthlySpend} height={240} />
+            )}
+          </div>
+
+          <div className="glass-card p-5">
+            <div className="mb-4">
+              <h3 className="font-semibold text-white">Category Mix</h3>
+              <p className="mt-0.5 text-xs text-slate-500">Department spending by category</p>
+            </div>
+            {categoryLoading ? (
+              <div className="skeleton h-56 w-full" />
+            ) : categorySpend.length > 0 ? (
+              <CategoryPieChart data={categorySpend} height={240} />
+            ) : (
+              <div className="flex h-56 items-center justify-center text-slate-600">No category data available</div>
+            )}
+          </div>
+        </div>
+
+        <div className="glass-card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-800 p-5">
+            <div>
+              <h3 className="font-semibold text-white">Department Approval Queue</h3>
+              <p className="mt-0.5 text-xs text-slate-500">Only pending expenses from employees in your department</p>
+            </div>
+            <button
+              onClick={() => navigate('/manager/queue')}
+              className="flex items-center gap-1.5 text-sm text-indigo-400 transition-colors hover:text-indigo-300"
+            >
+              View full queue <ArrowRight size={14} />
+            </button>
+          </div>
+
+          {pendingApprovalsLoading ? (
+            <LoadingSkeleton rows={6} />
+          ) : pendingApprovals.length === 0 ? (
+            <div className="py-16 text-center text-slate-500">No department expenses are waiting for review.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Expense</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Risk</th>
+                    <th>Submitted</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingApprovals.map((expense) => {
+                    const employee = visibleDepartmentEmployees.find(
+                      (item) => (item.authUserId ?? item.id) === expense.employeeId
+                    );
+                    return (
+                      <tr key={expense.id}>
+                        <td>
+                          <button
+                            onClick={() => expense.employeeId && navigate(`/manager/employees/${expense.employeeId}`)}
+                            className="text-left text-sm font-medium text-indigo-300 hover:text-indigo-200"
+                          >
+                            {employee?.username || `Employee #${expense.employeeId ?? 'N/A'}`}
+                          </button>
+                        </td>
+                        <td>
+                          <div>
+                            <p className="text-sm font-medium text-white">{expense.title}</p>
+                            <p className="text-xs text-slate-500">{expense.merchantName || expense.expenseNumber}</p>
+                          </div>
+                        </td>
+                        <td className="font-semibold text-white">{formatAmount(expense.amount, expense.currency)}</td>
+                        <td><StatusBadge status={expense.status as ExpenseStatus} size="sm" /></td>
+                        <td><RiskBadge riskLevel={expense.riskLevel as RiskLevel} score={expense.riskScore} size="sm" /></td>
+                        <td className="text-xs text-slate-500">
+                          {expense.submittedAt ? format(new Date(expense.submittedAt), 'MMM d, yyyy') : '—'}
+                        </td>
+                        <td>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => handleApprove(expense.id)}
+                              disabled={actionLoading === expense.id}
+                              className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-emerald-950 hover:text-emerald-400 disabled:opacity-50"
+                              title="Approve"
+                            >
+                              <CheckCircle size={15} />
+                            </button>
+                            <button
+                              onClick={() => openReviewModal('changes', expense.id)}
+                              disabled={actionLoading === expense.id}
+                              className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-amber-950 hover:text-amber-400 disabled:opacity-50"
+                              title="Request changes"
+                            >
+                              <Clock size={15} />
+                            </button>
+                            <button
+                              onClick={() => openReviewModal('reject', expense.id)}
+                              disabled={actionLoading === expense.id}
+                              className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-rose-950 hover:text-rose-400 disabled:opacity-50"
+                              title="Reject"
+                            >
+                              <XCircle size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <Modal
+          isOpen={reviewAction !== null}
+          onClose={closeReviewModal}
+          title={reviewAction === 'changes' ? 'Request Changes' : 'Reject Expense'}
+          footer={(
+            <>
+              <button onClick={closeReviewModal} className="btn-secondary text-sm">Cancel</button>
+              <button
+                onClick={handleReviewSubmit}
+                disabled={!reviewNotes.trim() || actionLoading !== null}
+                className="btn-primary text-sm"
+              >
+                {reviewAction === 'changes' ? 'Request Changes' : 'Reject Expense'}
+              </button>
+            </>
+          )}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-slate-400">
+              {reviewAction === 'changes'
+                ? 'Explain what the employee needs to update before the expense can be approved.'
+                : 'This rejection note will be visible to the employee.'}
+            </p>
+            <textarea
+              value={reviewNotes}
+              onChange={(event) => setReviewNotes(event.target.value)}
+              rows={4}
+              placeholder="Add review notes..."
+              className="form-input w-full resize-none"
+            />
+          </div>
+        </Modal>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-white">
-            {getGreeting()}, <span className="gradient-text">{user?.username || 'User'}</span> 👋
+            {getGreeting()}, <span className="gradient-text">{user?.username || 'User'}</span>
           </h2>
-          <p className="text-slate-400 text-sm mt-1">
-            {format(new Date(), 'EEEE, MMMM d, yyyy')} • Here's your expense overview
+          <p className="mt-1 text-sm text-slate-400">
+            {format(new Date(), 'EEEE, MMMM d, yyyy')} · your dashboard is scoped only to your expenses.
           </p>
         </div>
         <div className="flex gap-3">
@@ -162,14 +573,13 @@ const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      {statsLoading ? (
+      {personalStatsLoading ? (
         <StatsCardSkeleton />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatsCard
             title="Total Expenses"
-            value={stats?.totalExpenses ?? 0}
+            value={personalStats?.totalExpenses ?? 0}
             subtitle="All time submissions"
             icon={Receipt}
             trend={totalExpensesTrend}
@@ -178,7 +588,7 @@ const DashboardPage: React.FC = () => {
           />
           <StatsCard
             title="Pending Approval"
-            value={stats?.pendingCount ?? 0}
+            value={personalStats?.pendingCount ?? 0}
             subtitle="Awaiting review"
             icon={Clock}
             colorClass="card-amber"
@@ -186,8 +596,8 @@ const DashboardPage: React.FC = () => {
           />
           <StatsCard
             title="This Month"
-            value={`$${((stats?.thisMonthAmount ?? 0) / 1000).toFixed(1)}k`}
-            subtitle="Total spend"
+            value={formatAmount(Number(personalStats?.thisMonthAmount ?? 0))}
+            subtitle="Your spend only"
             icon={DollarSign}
             trend={thisMonthTrend}
             colorClass="card-emerald"
@@ -195,8 +605,8 @@ const DashboardPage: React.FC = () => {
           />
           <StatsCard
             title="High Risk Alerts"
-            value={stats?.highRiskAlerts ?? 0}
-            subtitle="Require attention"
+            value={personalStats?.highRiskAlerts ?? 0}
+            subtitle="From your expenses"
             icon={AlertTriangle}
             colorClass="card-rose"
             gradient="from-rose-500 to-pink-600"
@@ -204,34 +614,29 @@ const DashboardPage: React.FC = () => {
         </div>
       )}
 
-      {/* Charts + Recent Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Monthly Spend Chart */}
-        <div className="lg:col-span-2 glass-card p-5">
-          <div className="flex items-center justify-between mb-5">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="glass-card p-5 lg:col-span-2">
+          <div className="mb-5 flex items-center justify-between">
             <div>
               <h3 className="font-semibold text-white">Monthly Spending</h3>
-              <p className="text-xs text-slate-500 mt-0.5">{currentYear} • Total by month</p>
+              <p className="mt-0.5 text-xs text-slate-500">{currentYear} · scoped to your account</p>
             </div>
-            <div className="flex items-center gap-2 text-xs text-emerald-400 font-medium">
+            <div className="flex items-center gap-2 text-xs font-medium text-emerald-400">
               <TrendingUp size={14} />
               <span>Year to date</span>
             </div>
           </div>
           {monthlyLoading ? (
-            <div className="skeleton h-48 w-full" />
+            <div className="skeleton h-56 w-full" />
           ) : monthlySpend.length > 0 ? (
-            <MonthlySpendChart data={monthlySpend} height={220} />
+            <MonthlySpendChart data={monthlySpend} height={240} />
           ) : (
-            <div className="h-48 flex items-center justify-center text-slate-600">
-              <p>No spending data available</p>
-            </div>
+            <div className="flex h-56 items-center justify-center text-slate-600">No spending data available</div>
           )}
         </div>
 
-        {/* Quick Actions */}
         <div className="glass-card p-5">
-          <h3 className="font-semibold text-white mb-4">Quick Actions</h3>
+          <h3 className="mb-4 font-semibold text-white">Quick Actions</h3>
           <div className="space-y-3">
             {[
               {
@@ -243,14 +648,14 @@ const DashboardPage: React.FC = () => {
               },
               {
                 label: 'View All Expenses',
-                description: 'Browse expense history',
+                description: 'Browse your expense history',
                 path: '/expenses',
                 icon: Receipt,
                 color: 'from-slate-600 to-slate-700',
               },
               {
-                label: 'Analytics & Reports',
-                description: 'View spending reports',
+                label: 'Reports & Analytics',
+                description: 'Your scoped reporting view',
                 path: '/reports',
                 icon: BarChart2,
                 color: 'from-emerald-600 to-teal-700',
@@ -261,16 +666,16 @@ const DashboardPage: React.FC = () => {
                 <button
                   key={action.path}
                   onClick={() => navigate(action.path)}
-                  className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-slate-700 hover:border-indigo-500/40 hover:bg-slate-800/50 transition-all group"
+                  className="group flex w-full items-center gap-3 rounded-xl border border-slate-700 p-3.5 transition-all hover:border-indigo-500/40 hover:bg-slate-800/50"
                 >
-                  <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${action.color} flex items-center justify-center flex-shrink-0`}>
+                  <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${action.color}`}>
                     <Icon size={16} className="text-white" />
                   </div>
                   <div className="flex-1 text-left">
                     <p className="text-sm font-medium text-white">{action.label}</p>
                     <p className="text-xs text-slate-500">{action.description}</p>
                   </div>
-                  <ArrowRight size={16} className="text-slate-600 group-hover:text-indigo-400 transition-colors" />
+                  <ArrowRight size={16} className="text-slate-600 transition-colors group-hover:text-indigo-400" />
                 </button>
               );
             })}
@@ -278,11 +683,11 @@ const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="glass-card p-5">
           <div className="mb-4">
             <h3 className="font-semibold text-white">Recent Status Mix</h3>
-            <p className="mt-0.5 text-xs text-slate-500">Donut view of the latest 6 expenses</p>
+            <p className="mt-0.5 text-xs text-slate-500">Your latest 6 expenses</p>
           </div>
           {recentLoading ? (
             <div className="skeleton h-60 w-full" />
@@ -298,16 +703,14 @@ const DashboardPage: React.FC = () => {
               </div>
             </>
           ) : (
-            <div className="flex h-60 items-center justify-center text-slate-600">
-              <p>No recent expense data available</p>
-            </div>
+            <div className="flex h-60 items-center justify-center text-slate-600">No recent expense data available</div>
           )}
         </div>
 
-        <div className="lg:col-span-2 glass-card p-5">
+        <div className="glass-card p-5 lg:col-span-2">
           <div className="mb-4">
             <h3 className="font-semibold text-white">Weekly Spend Candles</h3>
-            <p className="mt-0.5 text-xs text-slate-500">Click any week candle to inspect that week’s expense activity</p>
+            <p className="mt-0.5 text-xs text-slate-500">Your own weekly expense activity</p>
           </div>
           {expensesLoading ? (
             <div className="skeleton h-60 w-full" />
@@ -332,14 +735,14 @@ const DashboardPage: React.FC = () => {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-bold text-white">${selectedWeek.total.toLocaleString()}</p>
+                      <p className="text-lg font-bold text-white">{formatAmount(selectedWeek.total)}</p>
                       <p className="text-xs text-slate-500">{selectedWeek.expenses.length} expense(s)</p>
                     </div>
                   </div>
                   <div className="space-y-2">
                     {selectedWeek.expenses
-                      .sort((a: Expense, b: Expense) => new Date(b.expenseDate).getTime() - new Date(a.expenseDate).getTime())
-                      .map((expense: Expense) => (
+                      .sort((a, b) => new Date(b.expenseDate).getTime() - new Date(a.expenseDate).getTime())
+                      .map((expense) => (
                         <button
                           key={expense.id}
                           onClick={() => navigate(`/expenses/${expense.id}`)}
@@ -354,7 +757,7 @@ const DashboardPage: React.FC = () => {
                           <div className="ml-4 flex items-center gap-3">
                             <StatusBadge status={expense.status as ExpenseStatus} size="sm" />
                             <span className="text-sm font-semibold text-white">
-                              {expense.currency} {expense.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              {formatAmount(expense.amount, expense.currency)}
                             </span>
                           </div>
                         </button>
@@ -364,20 +767,17 @@ const DashboardPage: React.FC = () => {
               )}
             </div>
           ) : (
-            <div className="flex h-60 items-center justify-center text-slate-600">
-              <p>No weekly expense history available</p>
-            </div>
+            <div className="flex h-60 items-center justify-center text-slate-600">No weekly expense history available</div>
           )}
         </div>
       </div>
 
-      {/* Recent Expenses */}
       <div className="glass-card overflow-hidden">
-        <div className="flex items-center justify-between p-5 border-b border-slate-800">
+        <div className="flex items-center justify-between border-b border-slate-800 p-5">
           <h3 className="font-semibold text-white">Recent Expenses</h3>
           <button
             onClick={() => navigate('/expenses')}
-            className="flex items-center gap-1.5 text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+            className="flex items-center gap-1.5 text-sm text-indigo-400 transition-colors hover:text-indigo-300"
           >
             View all <ArrowRight size={14} />
           </button>
@@ -396,42 +796,31 @@ const DashboardPage: React.FC = () => {
             </thead>
             <tbody>
               {recentLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i}>
-                    {Array.from({ length: 6 }).map((_, j) => (
-                      <td key={j}><div className="skeleton h-4 w-full" /></td>
+                Array.from({ length: 5 }).map((_, rowIndex) => (
+                  <tr key={rowIndex}>
+                    {Array.from({ length: 6 }).map((_, colIndex) => (
+                      <td key={colIndex}><div className="skeleton h-4 w-full" /></td>
                     ))}
                   </tr>
                 ))
               ) : recentExpenses.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-10 text-slate-500">
-                    No expenses yet. <button onClick={() => navigate('/expenses/new')} className="text-indigo-400 hover:underline">Create your first one</button>
+                  <td colSpan={6} className="py-10 text-center text-slate-500">
+                    No expenses yet.{' '}
+                    <button onClick={() => navigate('/expenses/new')} className="text-indigo-400 hover:underline">
+                      Create your first one
+                    </button>
                   </td>
                 </tr>
               ) : (
-                recentExpenses.map((exp) => (
-                  <tr
-                    key={exp.id}
-                    className="cursor-pointer"
-                    onClick={() => navigate(`/expenses/${exp.id}`)}
-                  >
-                    <td>
-                      <p className="font-medium text-white text-sm truncate max-w-[160px]">{exp.title}</p>
-                    </td>
-                    <td className="text-slate-400 text-sm">{exp.merchantName}</td>
-                    <td>
-                      <span className="font-semibold text-white">${exp.amount.toLocaleString()}</span>
-                    </td>
-                    <td>
-                      <StatusBadge status={exp.status as ExpenseStatus} size="sm" />
-                    </td>
-                    <td>
-                      <RiskBadge riskLevel={exp.riskLevel as RiskLevel} size="sm" />
-                    </td>
-                    <td className="text-slate-500 text-xs">
-                      {format(new Date(exp.createdAt), 'MMM d, yyyy')}
-                    </td>
+                recentExpenses.map((expense) => (
+                  <tr key={expense.id} className="cursor-pointer" onClick={() => navigate(`/expenses/${expense.id}`)}>
+                    <td><p className="max-w-[180px] truncate text-sm font-medium text-white">{expense.title}</p></td>
+                    <td className="text-sm text-slate-400">{expense.merchantName}</td>
+                    <td className="font-semibold text-white">{formatAmount(expense.amount)}</td>
+                    <td><StatusBadge status={expense.status as ExpenseStatus} size="sm" /></td>
+                    <td><RiskBadge riskLevel={expense.riskLevel as RiskLevel} size="sm" /></td>
+                    <td className="text-xs text-slate-500">{format(new Date(expense.createdAt), 'MMM d, yyyy')}</td>
                   </tr>
                 ))
               )}

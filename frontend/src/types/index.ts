@@ -57,11 +57,13 @@ export interface Receipt {
 export interface Expense {
   id: number;
   expenseNumber: string;
+  employeeId?: number;
   title: string;
   description: string;
   amount: number;
   currency: string;
   merchantName: string;
+  categoryName?: string;
   expenseDate: string;
   status: ExpenseStatus;
   riskScore: number;
@@ -70,6 +72,7 @@ export interface Expense {
   items: ExpenseItem[];
   receipts: Receipt[];
   submittedAt: string;
+  reviewedAt?: string;
   createdAt: string;
   updatedAt?: string;
   submittedBy?: User;
@@ -153,6 +156,16 @@ export interface DepartmentSpend {
   averageAmount: number;
 }
 
+export interface ManagerDashboard {
+  departmentName: string;
+  totalEmployees: number;
+  pendingApprovals: number;
+  departmentExpensesThisMonth: number;
+  highRiskAlerts: number;
+  personalExpenseCount: number;
+  personalThisMonthAmount: number;
+}
+
 // ─── API Response Wrappers ────────────────────────────────────────────────────
 export interface ApiResponse<T> {
   success: boolean;
@@ -171,6 +184,7 @@ export interface PageResponse<T> {
 // ─── Employee ─────────────────────────────────────────────────────────────────
 export interface Employee {
   id: number;
+  authUserId?: number;
   username: string;
   email: string;
   firstName?: string;

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSelector } from 'react-redux';
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { Download, BarChart2, PieChart, TrendingUp, Calendar, RefreshCw } from 'lucide-react';
 import {
@@ -8,6 +9,8 @@ import {
 } from '../store/api/analyticsApi';
 import MonthlySpendChart from '../components/charts/MonthlySpendChart';
 import CategoryPieChart from '../components/charts/CategoryPieChart';
+import { RootState } from '../store';
+import { hasRole } from '../utils/roles';
 import {
   BarChart,
   Bar,
@@ -19,6 +22,8 @@ import {
 } from 'recharts';
 
 const ReportsPage: React.FC = () => {
+  const { user } = useSelector((state: RootState) => state.auth);
+  const canViewDepartmentSpend = hasRole(user?.role, 'ROLE_MANAGER') || hasRole(user?.role, 'ROLE_ADMIN');
   const currentYear = new Date().getFullYear();
   const [startDate, setStartDate] = useState(format(startOfMonth(subMonths(new Date(), 6)), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
@@ -26,7 +31,10 @@ const ReportsPage: React.FC = () => {
 
   const { data: monthlyData, isLoading: monthlyLoading, refetch: refetchMonthly } = useGetMonthlySpendQuery({ year });
   const { data: categoryData, isLoading: categoryLoading } = useGetCategorySpendQuery({ startDate, endDate });
-  const { data: departmentData, isLoading: deptLoading } = useGetDepartmentSpendQuery({ startDate, endDate });
+  const { data: departmentData, isLoading: deptLoading } = useGetDepartmentSpendQuery(
+    { startDate, endDate },
+    { skip: !canViewDepartmentSpend }
+  );
 
   const monthlySpend = monthlyData?.data ?? [];
   const categorySpend = categoryData?.data ?? [];
@@ -60,7 +68,13 @@ const ReportsPage: React.FC = () => {
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-xl font-bold text-white">Reports & Analytics</h2>
-          <p className="text-sm text-slate-500 mt-0.5">Spending insights and trends</p>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {hasRole(user?.role, 'ROLE_MANAGER')
+              ? 'Department-scoped insights and trends'
+              : hasRole(user?.role, 'ROLE_ADMIN')
+                ? 'Organization-wide insights and trends'
+                : 'Your personal spending insights and trends'}
+          </p>
         </div>
         <button onClick={handleExportCSV} className="btn-secondary text-sm">
           <Download size={15} />
@@ -147,7 +161,7 @@ const ReportsPage: React.FC = () => {
       </div>
 
       {/* Category + Department charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className={`grid grid-cols-1 gap-5 ${canViewDepartmentSpend ? 'lg:grid-cols-2' : ''}`}>
         {/* Category Breakdown */}
         <div className="glass-card p-5">
           <h3 className="font-semibold text-white mb-1">Category Breakdown</h3>
@@ -178,44 +192,52 @@ const ReportsPage: React.FC = () => {
         </div>
 
         {/* Department Spend */}
-        <div className="glass-card p-5">
-          <h3 className="font-semibold text-white mb-1">Department Spend</h3>
-          <p className="text-xs text-slate-500 mb-4">Budget utilization by department</p>
-          {deptLoading ? (
-            <div className="skeleton h-52 w-full" />
-          ) : departmentSpend.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart
-                data={departmentSpend.map((d) => ({ name: d.department, amount: d.totalAmount, avg: d.averageAmount }))}
-                margin={{ top: 5, right: 10, left: 0, bottom: 30 }}
-                barSize={20}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(51,65,85,0.4)" />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fill: '#64748B', fontSize: 11 }}
-                  axisLine={{ stroke: '#334155' }}
-                  tickLine={false}
-                  angle={-30}
-                  textAnchor="end"
-                />
-                <YAxis
-                  tick={{ fill: '#64748B', fontSize: 11 }}
-                  axisLine={{ stroke: '#334155' }}
-                  tickLine={false}
-                  tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-                />
-                <Tooltip
-                  contentStyle={{ background: '#1E293B', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
-                  formatter={(val: number) => [`$${val.toLocaleString()}`, 'Total']}
-                />
-                <Bar dataKey="amount" fill="#6366F1" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-40 flex items-center justify-center text-slate-600">No department data</div>
-          )}
-        </div>
+        {canViewDepartmentSpend && (
+          <div className="glass-card p-5">
+            <h3 className="font-semibold text-white mb-1">
+              {hasRole(user?.role, 'ROLE_MANAGER') ? 'Department Spend' : 'Organization Department Spend'}
+            </h3>
+            <p className="text-xs text-slate-500 mb-4">
+              {hasRole(user?.role, 'ROLE_MANAGER')
+                ? 'Authorized view of your department spending'
+                : 'Budget utilization by department'}
+            </p>
+            {deptLoading ? (
+              <div className="skeleton h-52 w-full" />
+            ) : departmentSpend.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart
+                  data={departmentSpend.map((d) => ({ name: d.department, amount: d.totalAmount, avg: d.averageAmount }))}
+                  margin={{ top: 5, right: 10, left: 0, bottom: 30 }}
+                  barSize={20}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(51,65,85,0.4)" />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fill: '#64748B', fontSize: 11 }}
+                    axisLine={{ stroke: '#334155' }}
+                    tickLine={false}
+                    angle={-30}
+                    textAnchor="end"
+                  />
+                  <YAxis
+                    tick={{ fill: '#64748B', fontSize: 11 }}
+                    axisLine={{ stroke: '#334155' }}
+                    tickLine={false}
+                    tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                  />
+                  <Tooltip
+                    contentStyle={{ background: '#1E293B', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
+                    formatter={(val: number) => [`$${val.toLocaleString()}`, 'Total']}
+                  />
+                  <Bar dataKey="amount" fill="#6366F1" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-40 flex items-center justify-center text-slate-600">No department data</div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

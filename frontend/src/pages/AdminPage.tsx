@@ -16,11 +16,12 @@ import {
   useGetDepartmentsQuery,
 } from '../store/api/userApi';
 import LoadingSkeleton from '../components/ui/LoadingSkeleton';
+import { formatRoleLabel, normalizeRole } from '../utils/roles';
 
 const ROLE_COLORS: Record<string, string> = {
-  ADMIN: 'bg-rose-950 text-rose-300 border border-rose-800',
-  MANAGER: 'bg-indigo-950 text-indigo-300 border border-indigo-800',
-  EMPLOYEE: 'bg-emerald-950 text-emerald-300 border border-emerald-800',
+  ROLE_ADMIN: 'bg-rose-950 text-rose-300 border border-rose-800',
+  ROLE_MANAGER: 'bg-indigo-950 text-indigo-300 border border-indigo-800',
+  ROLE_EMPLOYEE: 'bg-emerald-950 text-emerald-300 border border-emerald-800',
 };
 
 const AdminPage: React.FC = () => {
@@ -62,8 +63,8 @@ const AdminPage: React.FC = () => {
 
   // Stats
   const activeCount = employees.filter((e) => e.active).length;
-  const adminCount = employees.filter((e) => e.role === 'ADMIN').length;
-  const managerCount = employees.filter((e) => e.role === 'MANAGER').length;
+  const adminCount = employees.filter((e) => normalizeRole(e.role) === 'ROLE_ADMIN').length;
+  const managerCount = employees.filter((e) => normalizeRole(e.role) === 'ROLE_MANAGER').length;
 
   return (
     <div className="space-y-5">
@@ -189,8 +190,8 @@ const AdminPage: React.FC = () => {
                               <span className="text-sm text-slate-400">{employee.email}</span>
                             </td>
                             <td>
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${ROLE_COLORS[employee.role] || ROLE_COLORS.EMPLOYEE}`}>
-                                {employee.role}
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${ROLE_COLORS[normalizeRole(employee.role)] || ROLE_COLORS.ROLE_EMPLOYEE}`}>
+                                {formatRoleLabel(employee.role)}
                               </span>
                             </td>
                             <td>

@@ -61,7 +61,7 @@ public class MinioStorageService {
                             .contentType(contentType)
                             .build());
 
-            String url = minioEndpoint + "/" + bucketName + "/" + objectName;
+            String url = buildObjectUrl(bucketName, objectName);
             log.info("Uploaded file to MinIO: {}", url);
             return url;
 
@@ -70,6 +70,10 @@ public class MinioStorageService {
                     bucketName, objectName, e.getMessage(), e);
             throw new FileStorageException("Failed to upload file to storage", e);
         }
+    }
+
+    public String buildObjectUrl(String bucketName, String objectName) {
+        return minioEndpoint + "/" + bucketName + "/" + objectName;
     }
 
     /**
@@ -86,6 +90,20 @@ public class MinioStorageService {
         } catch (Exception e) {
             log.error("Failed to delete file from MinIO: {}", e.getMessage(), e);
             throw new FileStorageException("Failed to delete file from storage", e);
+        }
+    }
+
+    public byte[] getFileBytes(String bucketName, String objectName) {
+        try (GetObjectResponse objectStream = minioClient.getObject(
+                GetObjectArgs.builder()
+                        .bucket(bucketName)
+                        .object(objectName)
+                        .build())) {
+            return objectStream.readAllBytes();
+        } catch (Exception e) {
+            log.error("Failed to read file from MinIO bucket {}/{}: {}",
+                    bucketName, objectName, e.getMessage(), e);
+            throw new FileStorageException("Failed to read file from storage", e);
         }
     }
 }
